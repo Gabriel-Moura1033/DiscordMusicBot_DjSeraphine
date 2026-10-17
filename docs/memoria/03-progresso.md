@@ -50,3 +50,8 @@ Diário cronológico, mais recente por último.
 - Retry do 403 confirmado em produção: `5dPwBWvmcbQ` falhou com 403 na 1ª tentativa e tocou na 2ª.
 - Comandos globais antigos removidos (P-012); `deploy-commands.ts` passa a limpá-los sempre.
 - Fim antecipado sem erro observado (P-013): adicionado log de diagnóstico em `GuildPlayer.onTrackEnd` e `ActiveStream.diagnostics()`.
+
+## 2026-10-17 — Troca de servidor
+- `DISCORD_GUILD_ID` alterado no `.env`; comandos registrados na nova guild e container recriado (`up -d --force-recreate`, necessário para reler o `env_file`).
+- O servidor de testes anterior continua com os 12 comandos registrados e o bot como membro.
+- Lembrete: trocar de guild exige rodar o deploy de comandos de novo antes de reiniciar.
