@@ -29,6 +29,11 @@
 - **Autoplay** — `src/player/autoplay.ts` (puro: `titleKey`, `buildAvoid`, `pickAutoplayCandidate`, `queueEndAction`, `RecentTracks`) + estado no `GuildPlayer` (`autoplayPending`, `autoplayGeneration`, `autoplayFailedSeedId`). **Semente** = faixa cujo mix é consultado.
 - **autoplayFrom** — campo opcional de `Track`: título da semente; marca faixas do autoplay; `requesterLabel()` em `embeds.ts` mostra "Recomendado pela DJ Seraphine".
 - **titleKey** — título normalizado (sem parênteses, feat., acentos, pontuação e palavras de versão) para não tocar outra versão da mesma música.
+- **StreamPlan** — `src/audio/filters.ts`: `{ startSec, segments, filter, loudnorm }` com que um stream foi aberto. `buildAudioFilter(plan)` gera o `-af`; `mediaPosition(tocado, plan)` dá a posição no vídeo (seek + cortes + velocidade); `activePlan` no `GuildPlayer` substitui o antigo `startOffsetSec`.
+- **Segment** — trecho `[start, end)` no tempo do vídeo removido pelo SponsorBlock (`music_offtopic`).
+- **Pré-carga (preload)** — próxima faixa (`Queue.peekNext()`) aberta `PRELOAD_SECONDS` antes do fim e parada por backpressure; `tickPreload` (5 s) descarta se a próxima ou o plano mudou; `takePreload` usa se bater.
+- **GuildSettings** — preferências por guild (`filter`) guardadas no `PlayerManager`, sobrevivem ao player; persistidas na Fase 6.
+- **FilterName** — `nenhum` | `bassboost` | `nightcore` | `8d`.
 - **GuildRequester** — o que os guards (`checkJoin`, `checkPlayer`) leem de uma interação; vale para comandos e componentes.
 
 ## Convenções de código
@@ -53,6 +58,12 @@
 | `HISTORY_SIZE` | não | 20 | faixas lembradas por guild para o /previous (1–100) |
 | `AUTOPLAY_DEFAULT` | não | `false` | autoplay ligado ao conectar |
 | `AUTOPLAY_RECENT_LIMIT` | não | 50 | faixas do autoplay evitadas além do histórico (5–500) |
+| `LOUDNORM_ENABLED` | não | `true` | normalização de volume |
+| `PRELOAD_ENABLED` | não | `true` | pré-carga da próxima faixa |
+| `PRELOAD_SECONDS` | não | 20 | antecedência da pré-carga (5–120) |
+| `SPONSORBLOCK_ENABLED` | não | `true` | corta `music_offtopic` |
+| `SPONSORBLOCK_API_URL` | não | `https://sponsor.ajay.app` | API (https) |
+| `DEFAULT_FILTER` | não | `nenhum` | filtro inicial por guild |
 | `YTDLP_PATH` | não | `yt-dlp` | binário do yt-dlp |
 | `FFMPEG_PATH` | não | `ffmpeg` | binário do ffmpeg |
 | `YTDLP_AUTO_UPDATE` | não | `true` | `yt-dlp -U` no entrypoint do container |

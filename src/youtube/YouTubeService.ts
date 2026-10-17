@@ -62,13 +62,14 @@ const MAX_JSON_BYTES = 32 * 1024 * 1024;
  * rápido e confiável que `--download-sections` do yt-dlp, que corta só em início de cluster e
  * falha com m4a em stdout (ADR-035).
  */
-function ffmpegArgs(startSec: number): string[] {
+function ffmpegArgs(startSec: number, audioFilter: string | null): string[] {
   return [
     '-hide_banner',
     '-loglevel', 'error',
     ...(startSec > 0 ? ['-ss', String(startSec)] : []),
     '-i', 'pipe:0',
     '-vn',
+    ...(audioFilter ? ['-af', audioFilter] : []),
     '-f', 's16le',
     '-ar', '48000',
     '-ac', '2',
@@ -132,8 +133,8 @@ export class YouTubeService {
     }
   }
 
-  /** `startSec` > 0 começa a faixa nesse ponto (/seek). */
-  createStream(track: Track, startSec = 0): ActiveStream {
+  /** `startSec` > 0 começa a faixa nesse ponto (/seek); `audioFilter` é a cadeia `-af` (cortes, efeito, loudnorm). */
+  createStream(track: Track, options: { readonly startSec: number; readonly audioFilter: string | null }): ActiveStream {
     const pipeline = spawnPipeline(
       {
         command: this.config.ytdlpPath,
@@ -147,7 +148,7 @@ export class YouTubeService {
           track.url,
         ],
       },
-      { command: this.config.ffmpegPath, args: ffmpegArgs(startSec) },
+      { command: this.config.ffmpegPath, args: ffmpegArgs(options.startSec, options.audioFilter) },
     );
 
     const resource = createAudioResource(pipeline.output, {

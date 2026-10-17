@@ -3,6 +3,7 @@ import { logger } from '../logger.js';
 import { runGuarded } from './guards.js';
 import autoplay from './autoplay.js';
 import clear from './clear.js';
+import filtro from './filtro.js';
 import leave from './leave.js';
 import loop from './loop.js';
 import nowplaying from './nowplaying.js';
@@ -45,6 +46,7 @@ export const commands: readonly Command[] = [
   shuffle,
   loop,
   autoplay,
+  filtro,
   volume,
   leave,
 ];

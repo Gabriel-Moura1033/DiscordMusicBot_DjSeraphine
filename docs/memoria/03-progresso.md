@@ -98,3 +98,10 @@ Diário cronológico, mais recente por último.
 - Testes: 228 (+23): `titleKey` com títulos reais, escolha do candidato (semente, recentes, versões, duração), `queueEndAction` (regra do timer), `RecentTracks`, `removeWhere`, parse do JSON do mix.
 - Validado no container com código compilado: cadeia de 6 faixas (~1,4 s por mix, uma de 3,6 s), sem processos restantes; deploy com 21 comandos; `healthy`.
 - Pendente: teste no Discord (transição sem silêncio, timer de inatividade, /stop).
+
+## 2026-10-17 — Fase 5: qualidade de áudio
+- `src/audio/filters.ts` (cadeia `-af`, `mediaPosition`, `effectiveDuration`), `src/audio/sponsorblock.ts`, `GuildSettings`, `Queue.peekNext`, `createStream(track, { startSec, audioFilter })`, `GuildPlayer` com `StreamPlan`, pré-carga, cortes tardios e `setFilter`; `/filtro` (22 comandos); filtro no /nowplaying. Config: `LOUDNORM_ENABLED`, `PRELOAD_ENABLED`, `PRELOAD_SECONDS`, `SPONSORBLOCK_ENABLED`, `SPONSORBLOCK_API_URL`, `DEFAULT_FILTER`. ADRs 038–041.
+- Medições antes de implementar: CPU por filtro, latência com loudnorm, base de tempo do `aselect` depois de `-ss` (relativa ao seek).
+- Testes: 251 (+23). Um ajuste de fronteira em `mediaPosition` (exatamente no início de um corte = fim do corte).
+- Integração no container (código compilado): API real (~200 ms, cortes em 3 de 4 clipes); stream com seek + corte + nightcore + loudnorm com duração esperada; pré-carga parada 60 s tocou inteira; nenhum processo restante. Deploy 22 comandos; `healthy`; `top` só node.
+- Pendente: teste no Discord (transição com pré-carga, filtros de ouvido).

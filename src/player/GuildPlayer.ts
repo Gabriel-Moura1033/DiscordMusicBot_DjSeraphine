@@ -10,12 +10,23 @@ import {
 } from '@discordjs/voice';
 import { MessageFlags, type Guild, type GuildTextBasedChannel, type VoiceBasedChannel } from 'discord.js';
 import type { Logger } from 'pino';
+import {
+  buildAudioFilter,
+  effectiveDuration,
+  FILTER_SPEED,
+  mediaPosition,
+  plainPlan,
+  type FilterName,
+  type StreamPlan,
+} from '../audio/filters.js';
+import type { SponsorBlockClient } from '../audio/sponsorblock.js';
 import type { Config } from '../config.js';
 import { logger } from '../logger.js';
 import { trackLink } from '../util/format.js';
 import { YtError } from '../youtube/errors.js';
 import type { ActiveStream, Track, TrackInfo, YouTubeService } from '../youtube/YouTubeService.js';
 import { AUTOPLAY_REQUESTER, buildAvoid, pickAutoplayCandidate, queueEndAction, RecentTracks } from './autoplay.js';
+import type { GuildSettings } from './GuildSettings.js';
 import { History } from './History.js';
 import { Queue, type AdvanceOptions, type LoopMode } from './Queue.js';
 
@@ -34,6 +45,10 @@ const MAX_STREAM_RETRIES = 2;
 const EARLY_END_TOLERANCE_SEC = 10;
 /** Quanto esperar o primeiro áudio do novo stream num /seek antes de desistir (o antigo segue tocando). */
 const SEEK_TIMEOUT_MS = 30_000;
+/** Frequência da checagem de pré-carga (abre a próxima faixa / descarta se a fila mudou). */
+const PRELOAD_TICK_MS = 5_000;
+/** Ao aplicar cortes do SponsorBlock com a faixa já tocando: a troca de stream leva ~2 s. */
+const LATE_APPLY_LEAD_SEC = 2;
 
 /**
  * Ganchos para a camada de interface (painel de controles, presença). `trackFinished` sempre vem
@@ -48,6 +63,10 @@ export interface GuildPlayerDeps {
   readonly config: Config;
   readonly youtube: YouTubeService;
   readonly events: PlayerEvents;
+  /** `null` = SponsorBlock desligado. */
+  readonly sponsor: SponsorBlockClient | null;
+  /** Objeto compartilhado com o PlayerManager (sobrevive ao player). */
+  readonly settings: GuildSettings;
   readonly onDestroyed: (guildId: string) => void;
 }
 
@@ -92,6 +111,16 @@ export function waitForAudio(stream: ActiveStream, timeoutMs: number): Promise<'
   });
 }
 
+function samePlan(a: StreamPlan, b: StreamPlan): boolean {
+  return (
+    a.startSec === b.startSec &&
+    a.filter === b.filter &&
+    a.loudnorm === b.loudnorm &&
+    a.segments.length === b.segments.length &&
+    a.segments.every((segment, index) => segment.start === b.segments[index]?.start && segment.end === b.segments[index]?.end)
+  );
+}
+
 function autoplayExhaustedMessage(seed: Track): string {
   return `🤖 Autoplay: não achei uma próxima faixa a partir de ${trackLink(seed)} que ainda não tenha tocado. Use \`/play\` para continuar.`;
 }
@@ -121,8 +150,11 @@ export class GuildPlayer {
   private retries = 0;
   /** Faixa para a qual `trackStarted` foi emitido e `trackFinished` ainda não. */
   private startedTrack: Track | null = null;
-  /** Posição (s) em que o stream atual começou; > 0 depois de um /seek. */
-  private startOffsetSec = 0;
+  /** Como o stream atual foi aberto (posição inicial, cortes, filtro); converte tempo tocado em posição. */
+  private activePlan: StreamPlan = plainPlan();
+  /** Próxima faixa já aberta e parada esperando (no máximo uma). */
+  private preload: { readonly track: Track; readonly plan: StreamPlan; readonly stream: ActiveStream } | null = null;
+  private preloadTicker: NodeJS.Timeout | null = null;
   private seekGeneration = 0;
   /** /previous: a faixa interrompida volta para a fila, não para o histórico. */
   private skipHistoryOnce = false;
@@ -148,6 +180,10 @@ export class GuildPlayer {
     this.history = new History(deps.config.historySize);
     this.autoplayEnabled = deps.config.autoplayDefault;
     this.autoplayRecent = new RecentTracks(deps.config.autoplayRecentLimit);
+    if (deps.config.preloadEnabled) {
+      this.preloadTicker = setInterval(() => this.tickPreload(), PRELOAD_TICK_MS);
+      this.preloadTicker.unref();
+    }
     this.audioPlayer = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
     this.connection.subscribe(this.audioPlayer);
 
@@ -259,6 +295,18 @@ export class GuildPlayer {
     return 0;
   }
 
+  get filter(): FilterName {
+    return this.deps.settings.filter;
+  }
+
+  /** Troca o filtro da guild; se algo está tocando, reabre o stream na posição atual (como o /seek). */
+  async setFilter(filter: FilterName): Promise<SeekResult> {
+    this.deps.settings.filter = filter;
+    this.dropPreload('filter changed');
+    if (!this.queue.current || !this.active) return { status: 'idle' };
+    return this.seek(this.currentPosition());
+  }
+
   get isPaused(): boolean {
     const status = this.audioPlayer.state.status;
     return status === AudioPlayerStatus.Paused || status === AudioPlayerStatus.AutoPaused;
@@ -297,7 +345,7 @@ export class GuildPlayer {
     if (!track) return null;
     return {
       track,
-      elapsedSec: this.startOffsetSec + (this.active?.resource.playbackDuration ?? 0) / 1000,
+      elapsedSec: this.currentPosition(),
       paused: this.audioPlayer.state.status === AudioPlayerStatus.Paused,
     };
   }
@@ -353,8 +401,8 @@ export class GuildPlayer {
     const generation = ++this.seekGeneration;
     // Mesmas novas tentativas silenciosas da reprodução normal (ex.: 403 intermitente, P-011).
     for (let attempt = 1; ; attempt++) {
-      const stream = this.deps.youtube.createStream(track, positionSec);
-      stream.resource.volume?.setVolumeLogarithmic(this.volumePercent / 100);
+      const plan = this.planFor(track, positionSec);
+      const stream = this.openStream(track, plan);
       const outcome = await waitForAudio(stream, SEEK_TIMEOUT_MS);
 
       if (this.destroyed || generation !== this.seekGeneration || this.active !== before) {
@@ -362,7 +410,7 @@ export class GuildPlayer {
         return { status: 'superseded' };
       }
       if (outcome === 'ready' && !stream.resource.ended) {
-        this.swapStream(track, stream, before, positionSec);
+        this.swapStream(track, stream, before, plan);
         return { status: 'ok' };
       }
       stream.kill();
@@ -376,20 +424,41 @@ export class GuildPlayer {
     }
   }
 
-  private swapStream(track: Track, stream: ActiveStream, before: ActiveStream, positionSec: number): void {
+  private swapStream(track: Track, stream: ActiveStream, before: ActiveStream, plan: StreamPlan): void {
     // play() com outro recurso vai direto para Buffering/Playing (sem Idle), então onTrackEnd não dispara.
     this.active = stream;
-    this.startOffsetSec = positionSec;
+    this.activePlan = plan;
     this.retries = 0;
     this.audioPlayer.play(stream.resource);
     before.kill();
-    this.log.info({ trackId: track.id, positionSec }, 'track seeked');
+    this.log.info({ trackId: track.id, positionSec: plan.startSec, filter: plan.filter, cuts: plan.segments.length }, 'track seeked');
+  }
+
+  /** Posição atual no vídeo (s), considerando seek, cortes e velocidade do filtro. */
+  private currentPosition(): number {
+    return mediaPosition((this.active?.resource.playbackDuration ?? 0) / 1000, this.activePlan);
+  }
+
+  private planFor(track: Track, startSec: number): StreamPlan {
+    return {
+      startSec,
+      segments: this.deps.sponsor?.cached(track.id) ?? [],
+      filter: this.deps.settings.filter,
+      loudnorm: this.deps.config.loudnormEnabled,
+    };
+  }
+
+  private openStream(track: Track, plan: StreamPlan): ActiveStream {
+    const stream = this.deps.youtube.createStream(track, { startSec: plan.startSec, audioFilter: buildAudioFilter(plan) });
+    stream.resource.volume?.setVolumeLogarithmic(this.volumePercent / 100);
+    return stream;
   }
 
   stop(): void {
     this.queue.clearUpcoming();
     this.queue.loopMode = 'off';
     this.cancelAutoplay();
+    this.dropPreload('stop');
     if (this.queue.current) {
       this.stopRequested = true;
       this.stopCurrent({ skip: true, drop: true });
@@ -442,6 +511,9 @@ export class GuildPlayer {
     this.readyWatchdog = null;
     this.finishTrack();
     this.cancelAutoplay();
+    this.dropPreload('destroy');
+    if (this.preloadTicker) clearInterval(this.preloadTicker);
+    this.preloadTicker = null;
     this.queue.reset();
     this.active?.kill();
     this.active = null;
@@ -478,8 +550,11 @@ export class GuildPlayer {
     }
     this.clearTimer('idle');
     this.retries = 0;
-    this.startOffsetSec = 0;
-    this.startStream(track);
+    const plan = this.planFor(track, 0);
+    this.startStream(track, plan, this.takePreload(track, plan));
+    // Primeira vez que essa faixa toca sem os cortes conhecidos: aplica quando a API responder.
+    if (this.deps.sponsor && this.deps.sponsor.cached(track.id) === null) void this.applySegmentsLate(track);
+    this.prefetchSegments(this.queue.peekNext());
     const quiet = this.quietNextStart;
     this.quietNextStart = false;
     this.startedTrack = track;
@@ -589,16 +664,88 @@ export class GuildPlayer {
     }
   }
 
-  private startStream(track: Track): void {
-    const stream = this.deps.youtube.createStream(track, this.startOffsetSec);
+  private startStream(track: Track, plan: StreamPlan, preloaded: ActiveStream | null = null): void {
+    const stream = preloaded ?? this.openStream(track, plan);
+    // O volume pode ter mudado desde a pré-carga.
     stream.resource.volume?.setVolumeLogarithmic(this.volumePercent / 100);
     this.active = stream;
+    this.activePlan = plan;
     this.audioPlayer.play(stream.resource);
-    this.log.info({ trackId: track.id, title: track.title, attempt: this.retries + 1 }, 'track started');
+    this.log.info(
+      { trackId: track.id, title: track.title, attempt: this.retries + 1, preloaded: preloaded !== null, filter: plan.filter, cuts: plan.segments.length },
+      'track started',
+    );
+  }
+
+  /** Usa a pré-carga se for desta faixa com o mesmo plano; senão a descarta. */
+  private takePreload(track: Track, plan: StreamPlan): ActiveStream | null {
+    const preload = this.preload;
+    if (!preload) return null;
+    this.preload = null;
+    if (preload.track === track && samePlan(preload.plan, plan) && !preload.stream.resource.ended) return preload.stream;
+    preload.stream.kill();
+    this.log.debug({ trackId: preload.track.id }, 'preload discarded');
+    return null;
+  }
+
+  private dropPreload(reason: string): void {
+    if (!this.preload) return;
+    this.preload.stream.kill();
+    this.log.debug({ trackId: this.preload.track.id, reason }, 'preload dropped');
+    this.preload = null;
+  }
+
+  /**
+   * A cada 5 s: descarta a pré-carga se a próxima faixa (ou o plano) mudou; abre a próxima quando
+   * faltam `PRELOAD_SECONDS` para acabar. O stream aberto fica parado por backpressure.
+   */
+  private tickPreload(): void {
+    if (this.destroyed) return;
+    const current = this.queue.current;
+    const next = this.queue.peekNext();
+    if (this.preload && (!next || this.preload.track !== next || !samePlan(this.preload.plan, this.planFor(next, 0)))) {
+      this.dropPreload('queue changed');
+    }
+    if (this.preload || !current || !next || !this.active || current.durationSec === null || this.isChangingTrack()) return;
+
+    const end = effectiveDuration(current.durationSec, this.activePlan.segments, EARLY_END_TOLERANCE_SEC);
+    const remainingSec = (end - this.currentPosition()) / FILTER_SPEED[this.activePlan.filter];
+    const preloadSeconds = this.deps.config.preloadSeconds;
+    if (remainingSec > preloadSeconds) {
+      // Busca os cortes antes, para a pré-carga já sair com eles.
+      if (remainingSec <= preloadSeconds + PRELOAD_TICK_MS / 1000) this.prefetchSegments(next);
+      return;
+    }
+    // Cortes ainda não chegaram: espera um tick, se der tempo.
+    if (this.deps.sponsor && this.deps.sponsor.cached(next.id) === null && remainingSec > preloadSeconds / 2) {
+      this.prefetchSegments(next);
+      return;
+    }
+    const plan = this.planFor(next, 0);
+    this.preload = { track: next, plan, stream: this.openStream(next, plan) };
+    this.log.info({ trackId: next.id, remainingSec: Math.round(remainingSec) }, 'next track preloaded');
+  }
+
+  private prefetchSegments(track: Track | null): void {
+    if (!track || !this.deps.sponsor || this.deps.sponsor.cached(track.id) !== null) return;
+    void this.deps.sponsor.get(track.id, track.durationSec);
+  }
+
+  /** Cortes chegaram depois do início: reabre o stream logo à frente, já com eles. */
+  private async applySegmentsLate(track: Track): Promise<void> {
+    const sponsor = this.deps.sponsor;
+    if (!sponsor) return;
+    const segments = await sponsor.get(track.id, track.durationSec);
+    if (this.destroyed || this.queue.current !== track || !this.active || this.activePlan.segments.length > 0) return;
+    const target = this.currentPosition() + LATE_APPLY_LEAD_SEC;
+    if (!segments.some((segment) => segment.end > target)) return;
+    const result = await this.seek(target);
+    this.log.info({ trackId: track.id, cuts: segments.length, status: result.status }, 'sponsorblock segments applied');
   }
 
   private async onTrackEnd(): Promise<void> {
     const stream = this.active;
+    const plan = this.activePlan;
     const track = this.queue.current;
     const requested = this.pendingAdvance;
     const keepOutOfHistory = this.skipHistoryOnce;
@@ -614,11 +761,13 @@ export class GuildPlayer {
     if (this.destroyed) return;
 
     if (stream && track) {
-      const playedSec = Math.round(this.startOffsetSec + stream.resource.playbackDuration / 1000);
+      const playedSec = Math.round(mediaPosition(stream.resource.playbackDuration / 1000, plan));
       const endedBy = requested ? (requested.drop ? 'stop' : 'skip') : failure ? `failure:${failure.code}` : 'natural';
       this.log.info({ trackId: track.id, playedSec, durationSec: track.durationSec, endedBy }, 'track ended');
       // Fim "natural" bem antes da duração conhecida: corte silencioso do stream; loga o estado dos processos.
-      if (endedBy === 'natural' && track.durationSec !== null && playedSec < track.durationSec - EARLY_END_TOLERANCE_SEC) {
+      const expectedSec =
+        track.durationSec === null ? null : effectiveDuration(track.durationSec, plan.segments, EARLY_END_TOLERANCE_SEC);
+      if (endedBy === 'natural' && expectedSec !== null && playedSec < expectedSec - EARLY_END_TOLERANCE_SEC) {
         this.log.warn({ trackId: track.id, playedSec, durationSec: track.durationSec, pipeline: stream.diagnostics() }, 'track ended early');
       }
       // Só entra no histórico o que chegou a tocar (falha antes do áudio não conta).
@@ -630,7 +779,7 @@ export class GuildPlayer {
       if (failure.retriable && playedMs < EARLY_FAILURE_MS && this.retries < MAX_STREAM_RETRIES) {
         this.retries++;
         this.log.warn({ trackId: track.id, ytCode: failure.code, retry: this.retries }, 'stream failed before audio, retrying');
-        this.startStream(track);
+        this.startStream(track, plan);
         return;
       }
       const prefix =

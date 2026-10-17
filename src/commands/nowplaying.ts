@@ -1,4 +1,5 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
+import { FILTER_LABELS } from '../audio/filters.js';
 import { playerControlRow } from '../interactions/controls.js';
 import { formatDuration, progressBar, truncate } from '../util/format.js';
 import { baseEmbed, LOOP_LABELS, requesterLabel, thumbnailUrl } from './embeds.js';
@@ -34,6 +35,7 @@ const command: Command = {
           : { name: '🤖 Autoplay', value: requesterLabel(track), inline: true },
         { name: 'Volume', value: `${player.volume}%`, inline: true },
         { name: 'Loop', value: LOOP_LABELS[player.loopMode], inline: true },
+        { name: 'Filtro', value: FILTER_LABELS[player.filter], inline: true },
       );
     if (track.uploader) embed.setFooter({ text: track.uploader });
 

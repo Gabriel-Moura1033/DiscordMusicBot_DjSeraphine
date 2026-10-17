@@ -51,6 +51,13 @@ export class Queue {
     return this.current;
   }
 
+  /** A faixa que `advance({ skip: false, drop: false })` tocaria a seguir (para pré-carga). */
+  peekNext(): Track | null {
+    if (!this.current) return this.items[0] ?? null;
+    if (this.loopMode === 'track') return this.current;
+    return this.items[0] ?? (this.loopMode === 'queue' ? this.current : null);
+  }
+
   /** `position` é 1-based sobre os próximos itens (1 = a próxima faixa). */
   remove(position: number): Track | null {
     if (!Number.isInteger(position) || position < 1 || position > this.items.length) return null;

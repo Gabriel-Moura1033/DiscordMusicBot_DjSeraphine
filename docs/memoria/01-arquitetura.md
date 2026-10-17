@@ -42,6 +42,12 @@
 - Fim da fila → `onQueueEnd(seed = anterior ?? history[0], stopped)` → `queueEndAction`: `idle` (arma timer), `wait` (busca da mesma semente em andamento), `fetch`, `exhausted` (avisa + timer). Enquanto busca com a fila parada, o timer de inatividade fica desarmado; o timer de "sozinho" é independente.
 - `/stop` marca `stopRequested` e cancela buscas (`autoplayGeneration++`); desligar o autoplay também tira da fila as faixas com `autoplayFrom`.
 
+## Qualidade de áudio (Fase 5)
+- Todo stream é aberto com um `StreamPlan` (`planFor(track, startSec)`: cortes do cache do SponsorBlock, filtro da guild, loudnorm da config) → `createStream(track, { startSec, audioFilter })` → ffmpeg `-ss` + `-af aselect(cortes),efeito,loudnorm`.
+- SponsorBlock: `SponsorBlockClient` (fetch por prefixo de hash, cache 6 h, timeout 1,5 s, nunca lança). Cortes buscados antes (próxima da fila no início de cada faixa e na pré-carga); se a faixa começou sem eles, `applySegmentsLate` reabre o stream 2 s à frente com os cortes (via `seek`).
+- Pré-carga: `tickPreload` a cada 5 s; preload usado em `playNext` por `takePreload` (mesma faixa e mesmo plano); descartado em /stop, destroy, troca de filtro ou quando `peekNext()` muda.
+- `/filtro`: `GuildPlayer.setFilter` grava em `GuildSettings` e chama `seek(posição atual)`.
+
 ## Estado por guild (`GuildPlayer`)
 - `connection: VoiceConnection`, `audioPlayer: AudioPlayer`
 - `queue: Queue` (current, upcoming, loopMode)

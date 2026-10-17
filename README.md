@@ -20,6 +20,7 @@ Contexto do projeto, decisões e problemas conhecidos: [`docs/memoria/00-entrada
 | `/nowplaying` | Faixa atual com barra de progresso e botões de controle |
 | `/remove posicao:<n>` `/move de:<n> para:<n>` `/shuffle` `/loop modo:<desligado\|faixa\|fila>` | Edição da fila |
 | `/clear` | Limpa a fila sem parar a faixa atual |
+| `/filtro tipo:<nenhum\|bassboost\|nightcore\|8d>` | Efeito de áudio, salvo por servidor; aplica na posição atual (~2–3 s) |
 | `/autoplay` | Liga/desliga: quando a fila acaba, segue com músicas do mix do YouTube da última faixa (aparecem como "Recomendado pela DJ Seraphine") |
 | `/volume nivel:<0-100>` | Volume (efeito imediato) |
 | `/leave` | Sai do canal e descarta a fila |
@@ -95,6 +96,7 @@ Os testes são **puros**: um setup global faz `spawn`/`exec` e `fetch` lançarem
 - **Botões** ⏯️ ⏭️ 🔁 ⏹️ aparecem no aviso "tocando agora", na resposta do `/play` que começa a tocar na hora e no `/nowplaying`. Valem as mesmas regras dos comandos: só quem está no canal de voz do bot. 🔁 cicla off → faixa → fila. Quando a faixa termina, os botões daquela mensagem são desativados.
 - **Autocomplete do `/play`:** a partir de 3 letras sugere até 5 vídeos (a sugestão escolhida vira o link). Cada sugestão é uma busca no YouTube; resultados ficam em cache por `AUTOCOMPLETE_CACHE_TTL_SECONDS`. Se a busca demorar, a lista vem vazia e você pode mandar o texto mesmo assim.
 - **Autoplay:** com `/autoplay` ligado, quando começa a última faixa da fila o bot já escolhe a próxima no mix do YouTube dela (sem repetir o que tocou recentemente nem outra versão da mesma música). Se você pedir algo nesse meio tempo, sua música vem primeiro. `/stop` não aciona o autoplay; o bot ainda sai se ficar sozinho no canal.
+- **Qualidade de áudio:** volume normalizado (`loudnorm`), próxima faixa pré-carregada 20 s antes do fim (sem silêncio entre músicas) e trechos sem música dos clipes (intros, falas) pulados via [SponsorBlock](https://sponsor.ajay.app) — a consulta envia só um prefixo do hash do ID do vídeo. Cada um pode ser desligado no `.env`.
 - **Presença:** o bot mostra "Ouvindo <título>". Em mais de um servidor, mostra a faixa que começou por último; pausar não muda.
 
 ## Variáveis de ambiente
@@ -112,9 +114,13 @@ Veja [`.env.example`](.env.example). Obrigatórias: `DISCORD_TOKEN`, `DISCORD_CL
 | `Sign in to confirm you're not a bot`, `HTTP Error 429` | IP marcado pelo YouTube (comum em VPS/datacenter) ou excesso de requisições | Aguarde algumas horas; rode em IP residencial. O projeto não usa cookies (decisão ADR-014) |
 | `Sign in to confirm your age` | Vídeo com restrição de idade | Sem cookies não há como tocar; o bot pula e avisa |
 | Desafios JS / `No supported JavaScript runtime` | Deno ausente | `docker compose exec dj deno --version`; a imagem já inclui |
-| `/seek` responde "Não consegui mudar a posição" | yt-dlp falhou ao abrir o stream na nova posição (já tenta 3×) | A música segue de onde estava; tente de novo. Veja `seek failed` no log |
+| `/seek` responde "Não consegui reabrir o áudio" | yt-dlp falhou ao abrir o stream na nova posição (já tenta 3×) | A música segue de onde estava; tente de novo. Veja `seek failed` no log |
 | "🤖 Autoplay: não achei uma próxima faixa" | O mix da última faixa não tem nada que ainda não tenha tocado, ou o YouTube recusou a busca | Use `/play`; o autoplay segue a partir da nova faixa. Veja `autoplay:` no log |
 | Autoplay repete o mesmo artista | O mix do YouTube é montado em torno da faixa-semente | Normal; peça uma música de outro estilo e o autoplay segue a partir dela |
+| Música começa ~2 s depois e "reinicia" um pouco à frente | Primeira vez que o vídeo toca: os cortes do SponsorBlock chegam depois do início e o stream é reaberto já com eles | Normal; nas próximas vezes (cache) e na pré-carga não acontece. `SPONSORBLOCK_ENABLED=false` desliga |
+| Trecho de música foi pulado por engano | Corte do SponsorBlock errado (enviado pela comunidade) | `SPONSORBLOCK_ENABLED=false`, ou corrija o trecho no site do SponsorBlock |
+| `sponsorblock lookup failed` no log | API fora ou lenta (> 1,5 s) | Nada: a faixa toca sem cortes |
+| Barulho/distorção com bass boost | Ganho de grave alto em faixas já com muito grave | `/filtro tipo:nenhum` |
 | `/seek` demora | O áudio até o ponto pedido é baixado e descartado (ADR-035); em vídeos longos chega a ~7 s | Normal; a faixa continua tocando enquanto isso |
 | Busca retorna o vídeo errado | `ytsearch1` pega só o 1º resultado | Use `/search` para escolher, o autocomplete do `/play`, ou o link direto |
 | Autocomplete não sugere nada | Texto com menos de 3 letras, link, busca lenta (> ~2 s) ou `AUTOCOMPLETE_ENABLED=false` | Digite mais um pouco (a busca segue em segundo plano e a próxima tecla usa o cache) ou envie o texto: o `/play` busca do mesmo jeito |

@@ -213,3 +213,26 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Exibição:** "Recomendado pela DJ Seraphine (a partir de \"<semente>\")" no lugar de "pedido por" (texto pedido pelo usuário; no /queue sem a semente).
 - **Validado (container, 2026-10-17):** cadeia de 6 faixas a partir de "Bohemian Rhapsody" sem repetição, transitando de Queen para Guns N' Roses; mix de vídeo inexistente → `unavailable`.
 - **Descartado:** "related videos" via página do vídeo (o yt-dlp não expõe de forma estável); busca por artista (`ytsearch`) como fonte principal (repetitivo e sem noção de relevância).
+
+## ADR-038 — loudnorm ligado por padrão
+- **Data:** 2026-10-17
+- **Decisão:** `loudnorm=I=-16:TP=-1.5:LRA=11` (passada única) no fim da cadeia, `LOUDNORM_ENABLED=true` por padrão.
+- **Medido (container, 20 núcleos, faixa de 6 min):** CPU por stream em relação ao tempo real: sem filtro 0,15%; loudnorm 1,94% (≈ 13×, mas ~2% de um núcleo); dynaudnorm 0,17%; bassboost 0,25%; nightcore 0,18%; 8d 0,25%; aselect 0,15%. Tempo até o 1º áudio igual com e sem loudnorm (~2,0–2,3 s).
+- **Descartado:** `dynaudnorm` (mais barato, mas "bombeia" o volume dentro da música; o objetivo é igualar faixas); loudnorm em duas passadas (exige ler a faixa inteira antes).
+
+## ADR-039 — SponsorBlock music_offtopic via filtro do ffmpeg
+- **Data:** 2026-10-17
+- **Decisão:** cortes aplicados com `aselect='not(between(t,a,b)+…)',asetpts=N/SR/TB` no nosso ffmpeg (os tempos são deslocados pelo `-ss`: medido que o `t` conta a partir do ponto de seek). Consulta por prefixo do SHA-256 (k-anonimato), timeout 1,5 s, cache 6 h; falha = toca sem cortes. Cortes que somam > 80% da duração são ignorados.
+- **Início sem cache:** a faixa começa sem esperar a API; quando os cortes chegam, o stream é reaberto 2 s à frente com eles (troca sem silêncio, mecanismo do /seek). Pré-carga e "próxima da fila" deixam o cache quente.
+- **Descartado:** `--sponsorblock-remove` do yt-dlp (só funciona com pós-processamento de arquivo, não com stdout); esperar a API antes de tocar (deixaria o player em Idle e quebraria /skip nesse intervalo).
+- **Medido:** API ~200 ms; cortes reais encontrados em Gangnam Style (outro), Despacito (intro 22 s), Thriller (intro 4 min).
+
+## ADR-040 — Pré-carga da próxima faixa
+- **Data:** 2026-10-17
+- **Decisão:** a `PRELOAD_SECONDS` (20) do fim, abre o stream de `Queue.peekNext()` (respeita loop) com o plano atual; fica parado por backpressure. Usado se, na troca, a próxima e o plano forem os mesmos; senão é morto. Checagem a cada 5 s descarta se a fila mudou (o descarte pode atrasar até 5 s, sem vazamento: o processo morre no tick seguinte, em /stop, troca de filtro ou destroy).
+- **Validado:** stream pré-carregado parado 60 s tocou a faixa inteira depois; descartado não deixou processo nem `_MEI`.
+- **Risco aceito:** pausa longa com pré-carga aberta pode fazer o googlevideo derrubar a conexão; aí a faixa falha antes do áudio e cai no retry normal.
+
+## ADR-041 — /filtro por guild
+- **Data:** 2026-10-17
+- **Decisão:** `nenhum | bassboost | nightcore | 8d`, guardado em `GuildSettings` (sobrevive ao /leave; persistido na Fase 6). Aplicar reabre o stream na posição atual (ADR-035). Efeitos: `bass=g=8:f=110:w=0.6,alimiter=limit=0.95`; `aresample=48000,asetrate=48000*1.25,aresample=48000` (o primeiro aresample corrige m4a a 44,1 kHz); `apulsator=hz=0.125`. Nightcore entra na conversão tempo tocado → posição (velocidade 1,25).

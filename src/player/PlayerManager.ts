@@ -1,18 +1,32 @@
 import type { Guild, GuildTextBasedChannel, VoiceBasedChannel, VoiceState } from 'discord.js';
+import type { SponsorBlockClient } from '../audio/sponsorblock.js';
 import type { Config } from '../config.js';
 import type { YouTubeService } from '../youtube/YouTubeService.js';
 import { GuildPlayer, type PlayerEvents } from './GuildPlayer.js';
+import type { GuildSettings } from './GuildSettings.js';
 
 export class PlayerManager {
   private readonly players = new Map<string, GuildPlayer>();
   /** Conexões em andamento, para dois /play simultâneos não abrirem duas conexões. */
   private readonly connecting = new Map<string, Promise<GuildPlayer>>();
+  private readonly settings = new Map<string, GuildSettings>();
 
   constructor(
     private readonly config: Config,
     private readonly youtube: YouTubeService,
     private readonly events: PlayerEvents,
+    private readonly sponsor: SponsorBlockClient | null,
   ) {}
+
+  /** Mesmo objeto para a guild durante todo o processo: o player lê e altera direto. */
+  settingsFor(guildId: string): GuildSettings {
+    let settings = this.settings.get(guildId);
+    if (!settings) {
+      settings = { filter: this.config.defaultFilter };
+      this.settings.set(guildId, settings);
+    }
+    return settings;
+  }
 
   /** Descarta players com conexão morta, para o próximo /play reconectar do zero. */
   get(guildId: string): GuildPlayer | undefined {
@@ -40,6 +54,8 @@ export class PlayerManager {
       config: this.config,
       youtube: this.youtube,
       events: this.events,
+      sponsor: this.sponsor,
+      settings: this.settingsFor(guild.id),
       onDestroyed: (guildId) => {
         if (this.players.get(guildId)?.isDestroyed) this.players.delete(guildId);
       },

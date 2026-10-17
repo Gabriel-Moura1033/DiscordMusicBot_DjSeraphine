@@ -1,5 +1,6 @@
 import { generateDependencyReport } from '@discordjs/voice';
 import { ActivityType, Client, Events, GatewayIntentBits } from 'discord.js';
+import { SponsorBlockClient } from './audio/sponsorblock.js';
 import { SEARCH_TTL_MS } from './commands/search.js';
 import type { Services } from './commands/types.js';
 import { config } from './config.js';
@@ -62,7 +63,15 @@ async function main(): Promise<void> {
     },
   };
 
-  const players = new PlayerManager(config, youtube, events);
+  const sponsorblockApiUrl = config.sponsorblockApiUrl;
+  const sponsor = sponsorblockApiUrl
+    ? new SponsorBlockClient({
+        apiUrl: sponsorblockApiUrl,
+        fetch: (url, init) => fetch(url, { ...init, headers: { 'User-Agent': 'dj-discord-bot' } }),
+        onError: (error, videoId) => logger.warn({ err: error, videoId }, 'sponsorblock lookup failed, playing without cuts'),
+      })
+    : null;
+  const players = new PlayerManager(config, youtube, events, sponsor);
   const searches = new SearchSessions<TrackInfo>(SEARCH_TTL_MS);
   const suggestions = config.autocompleteEnabled
     ? new SuggestionProvider({

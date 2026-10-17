@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { FILTER_NAMES, isFilterName, type FilterName } from './audio/filters.js';
 
 dotenv.config({ quiet: true });
 
@@ -13,6 +14,12 @@ export interface Config {
   readonly historySize: number;
   readonly autoplayDefault: boolean;
   readonly autoplayRecentLimit: number;
+  readonly loudnormEnabled: boolean;
+  readonly preloadEnabled: boolean;
+  readonly preloadSeconds: number;
+  /** `null` = SponsorBlock desligado. */
+  readonly sponsorblockApiUrl: string | null;
+  readonly defaultFilter: FilterName;
   readonly ytdlpPath: string;
   readonly ffmpegPath: string;
   readonly logLevel: string;
@@ -65,6 +72,24 @@ function boolean(name: string, fallback: boolean): boolean {
   throw new ConfigError(`${name} deve ser "true" ou "false" (recebido: "${raw}")`);
 }
 
+function httpsUrl(name: string, fallback: string): string {
+  const value = optional(name, fallback).replace(/\/+$/, '');
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ConfigError(`${name} não é uma URL válida (recebido: "${value}")`);
+  }
+  if (url.protocol !== 'https:') throw new ConfigError(`${name} deve usar https (recebido: "${value}")`);
+  return value;
+}
+
+function filterName(name: string, fallback: FilterName): FilterName {
+  const value = optional(name, fallback);
+  if (!isFilterName(value)) throw new ConfigError(`${name} inválido: "${value}" (use ${FILTER_NAMES.join(', ')})`);
+  return value;
+}
+
 /** Diferente de `optional`: variável definida e vazia significa "desligado". */
 function optionalPath(name: string, fallback: string): string | null {
   const raw = process.env[name];
@@ -94,6 +119,13 @@ function loadConfig(): Config {
     historySize: integer('HISTORY_SIZE', 20, 1, 100),
     autoplayDefault: boolean('AUTOPLAY_DEFAULT', false),
     autoplayRecentLimit: integer('AUTOPLAY_RECENT_LIMIT', 50, 5, 500),
+    loudnormEnabled: boolean('LOUDNORM_ENABLED', true),
+    preloadEnabled: boolean('PRELOAD_ENABLED', true),
+    preloadSeconds: integer('PRELOAD_SECONDS', 20, 5, 120),
+    sponsorblockApiUrl: boolean('SPONSORBLOCK_ENABLED', true)
+      ? httpsUrl('SPONSORBLOCK_API_URL', 'https://sponsor.ajay.app')
+      : null,
+    defaultFilter: filterName('DEFAULT_FILTER', 'nenhum'),
     ytdlpPath: optional('YTDLP_PATH', 'yt-dlp'),
     ffmpegPath: optional('FFMPEG_PATH', 'ffmpeg'),
     logLevel,
