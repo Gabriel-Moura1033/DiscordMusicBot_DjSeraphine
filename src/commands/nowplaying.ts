@@ -29,7 +29,9 @@ const command: Command = {
         `${progressBar(elapsedSec, track.durationSec)}\n\`${formatDuration(elapsedSec)} / ${formatDuration(track.durationSec)}\``,
       )
       .addFields(
-        { name: 'Pedido por', value: requesterLabel(track), inline: true },
+        track.autoplayFrom === undefined
+          ? { name: 'Pedido por', value: track.requestedBy.name, inline: true }
+          : { name: '🤖 Autoplay', value: requesterLabel(track), inline: true },
         { name: 'Volume', value: `${player.volume}%`, inline: true },
         { name: 'Loop', value: LOOP_LABELS[player.loopMode], inline: true },
       );

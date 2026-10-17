@@ -210,5 +210,6 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Timers (ADR-008):** fila parada esperando o mix não arma o timer de inatividade; mix sem candidato → aviso único + timer. O timer de "sozinho no canal" continua igual (o bot sai mesmo com autoplay).
 - **Concorrência:** resultado descartado se a fila mudou durante a busca (faixa nova ou /play); a próxima "última faixa" busca de novo. Por isso, se o usuário pede algo durante a busca, a música dele vem primeiro.
 - **/stop** não aciona o autoplay; desligar o autoplay remove da fila as faixas que ele colocou.
+- **Exibição:** "Recomendado pela DJ Seraphine (a partir de \"<semente>\")" no lugar de "pedido por" (texto pedido pelo usuário; no /queue sem a semente).
 - **Validado (container, 2026-10-17):** cadeia de 6 faixas a partir de "Bohemian Rhapsody" sem repetição, transitando de Queen para Guns N' Roses; mix de vídeo inexistente → `unavailable`.
 - **Descartado:** "related videos" via página do vídeo (o yt-dlp não expõe de forma estável); busca por artista (`ytsearch`) como fonte principal (repetitivo e sem noção de relevância).

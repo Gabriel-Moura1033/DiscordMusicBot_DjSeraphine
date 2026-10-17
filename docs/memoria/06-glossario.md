@@ -27,7 +27,7 @@
 - **SeekResult** — `ok` | `idle` | `busy` (entre faixas) | `superseded` (faixa mudou/outro seek) | `failed` (`YtError`).
 - **isChangingTrack** — `GuildPlayer`: player Idle com faixa atual = `onTrackEnd` em andamento; /skipto, /previous e /seek recusam com "tente de novo".
 - **Autoplay** — `src/player/autoplay.ts` (puro: `titleKey`, `buildAvoid`, `pickAutoplayCandidate`, `queueEndAction`, `RecentTracks`) + estado no `GuildPlayer` (`autoplayPending`, `autoplayGeneration`, `autoplayFailedSeedId`). **Semente** = faixa cujo mix é consultado.
-- **autoplayFrom** — campo opcional de `Track`: título da semente; marca faixas do autoplay (`requesterLabel()` em `embeds.ts`).
+- **autoplayFrom** — campo opcional de `Track`: título da semente; marca faixas do autoplay; `requesterLabel()` em `embeds.ts` mostra "Recomendado pela DJ Seraphine".
 - **titleKey** — título normalizado (sem parênteses, feat., acentos, pontuação e palavras de versão) para não tocar outra versão da mesma música.
 - **GuildRequester** — o que os guards (`checkJoin`, `checkPlayer`) leem de uma interação; vale para comandos e componentes.
 

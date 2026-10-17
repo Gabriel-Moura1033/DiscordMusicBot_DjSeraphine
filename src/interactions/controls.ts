@@ -127,7 +127,7 @@ export class ControlPanels implements PlayerEvents {
       .setTitle(truncate(track.title, 256))
       .setURL(track.url)
       .setThumbnail(thumbnailUrl(track))
-      .setDescription(`\`${formatDuration(track.durationSec)}\` · pedido por **${requesterLabel(track)}**`);
+      .setDescription(`\`${formatDuration(track.durationSec)}\` · ${requesterLabel(track)}`);
     let message: Message<true>;
     try {
       message = await player.textChannel.send({

@@ -11,7 +11,7 @@ import {
 import { logger } from '../logger.js';
 import type { GuildPlayer } from '../player/GuildPlayer.js';
 import { formatDuration, trackLink } from '../util/format.js';
-import { baseEmbed, LOOP_LABELS } from './embeds.js';
+import { baseEmbed, LOOP_LABELS, requesterLabel } from './embeds.js';
 import type { Command } from './types.js';
 
 const PAGE_SIZE = 10;
@@ -40,7 +40,7 @@ function render(player: GuildPlayer, page: number, idPrefix: string) {
     const start = current * PAGE_SIZE;
     upcoming.slice(start, start + PAGE_SIZE).forEach((track, index) => {
       lines.push(
-        `\`${start + index + 1}.\` ${trackLink(track, 60)} \`${formatDuration(track.durationSec)}\` — ${track.requestedBy.name}`,
+        `\`${start + index + 1}.\` ${trackLink(track, 60)} \`${formatDuration(track.durationSec)}\` — ${track.autoplayFrom === undefined ? track.requestedBy.name : requesterLabel(track, false)}`,
       );
     });
   }

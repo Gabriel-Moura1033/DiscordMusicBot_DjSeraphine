@@ -11,10 +11,11 @@ export const LOOP_LABELS: Record<LoopMode, string> = {
   queue: '🔁 fila',
 };
 
-/** "pedido por" de uma faixa; as do autoplay dizem de qual faixa vieram. */
-export function requesterLabel(track: Track): string {
-  if (track.autoplayFrom === undefined) return track.requestedBy.name;
-  return `${track.requestedBy.name} (a partir de "${truncate(track.autoplayFrom, 50)}")`;
+/** "pedido por **X**", ou "Recomendado pela DJ Seraphine" (+ semente) nas faixas do autoplay. */
+export function requesterLabel(track: Track, withSeed = true): string {
+  if (track.autoplayFrom === undefined) return `pedido por **${track.requestedBy.name}**`;
+  const seed = withSeed ? ` (a partir de "${truncate(track.autoplayFrom, 50)}")` : '';
+  return `Recomendado pela ${track.requestedBy.name}${seed}`;
 }
 
 export function thumbnailUrl(track: TrackInfo): string {

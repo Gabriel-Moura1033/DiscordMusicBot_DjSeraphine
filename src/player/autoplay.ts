@@ -1,7 +1,7 @@
 import type { TrackInfo } from '../youtube/YouTubeService.js';
 
-/** Nome mostrado em "pedido por" nas faixas escolhidas pelo autoplay. */
-export const AUTOPLAY_REQUESTER = '🤖 Autoplay';
+/** `requestedBy.name` das faixas escolhidas pelo autoplay (exibidas como "Recomendado pela DJ Seraphine"). */
+export const AUTOPLAY_REQUESTER = 'DJ Seraphine';
 
 /** Palavras que só distinguem versões do mesmo vídeo ("Official Video" × "Lyrics"). */
 const NOISE_WORDS = new Set([

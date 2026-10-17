@@ -20,7 +20,7 @@ Contexto do projeto, decisões e problemas conhecidos: [`docs/memoria/00-entrada
 | `/nowplaying` | Faixa atual com barra de progresso e botões de controle |
 | `/remove posicao:<n>` `/move de:<n> para:<n>` `/shuffle` `/loop modo:<desligado\|faixa\|fila>` | Edição da fila |
 | `/clear` | Limpa a fila sem parar a faixa atual |
-| `/autoplay` | Liga/desliga: quando a fila acaba, segue com músicas do mix do YouTube da última faixa (marcadas com 🤖) |
+| `/autoplay` | Liga/desliga: quando a fila acaba, segue com músicas do mix do YouTube da última faixa (aparecem como "Recomendado pela DJ Seraphine") |
 | `/volume nivel:<0-100>` | Volume (efeito imediato) |
 | `/leave` | Sai do canal e descarta a fila |
 
