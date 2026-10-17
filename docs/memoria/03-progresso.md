@@ -45,3 +45,8 @@ Diário cronológico, mais recente por último.
 ## 2026-10-17 — Correção do 403 intermitente
 - Primeiro teste real: voz funciona (faixa 1 tocou completa, ~4 min). Faixa 2 falhou com HTTP 403 (P-011).
 - `errors.ts`: código `forbidden` + `YtError.retriable`; `GuildPlayer`: `startStream()` separado de `playNext()`, retry silencioso (ADR-024). Imagem reconstruída e bot reiniciado.
+
+## 2026-10-17 — Análise de logs após testes
+- Retry do 403 confirmado em produção: `5dPwBWvmcbQ` falhou com 403 na 1ª tentativa e tocou na 2ª.
+- Comandos globais antigos removidos (P-012); `deploy-commands.ts` passa a limpá-los sempre.
+- Fim antecipado sem erro observado (P-013): adicionado log de diagnóstico em `GuildPlayer.onTrackEnd` e `ActiveStream.diagnostics()`.

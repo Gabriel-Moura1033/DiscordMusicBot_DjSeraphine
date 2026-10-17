@@ -25,6 +25,8 @@ const FAILURE_GRACE_MS = 3_000;
 const EARLY_FAILURE_MS = 2_000;
 /** Novas tentativas silenciosas para falhas transitórias antes de o áudio começar (ex.: 403 do googlevideo). */
 const MAX_STREAM_RETRIES = 2;
+/** Folga entre a duração do vídeo e o áudio tocado antes de considerar que a faixa terminou cedo. */
+const EARLY_END_TOLERANCE_SEC = 10;
 
 export interface GuildPlayerDeps {
   readonly config: Config;
@@ -259,6 +261,16 @@ export class GuildPlayer {
       stream.kill();
     }
     if (this.destroyed) return;
+
+    if (stream && track) {
+      const playedSec = Math.round(stream.resource.playbackDuration / 1000);
+      const endedBy = requested ? (requested.drop ? 'stop' : 'skip') : failure ? `failure:${failure.code}` : 'natural';
+      this.log.info({ trackId: track.id, playedSec, durationSec: track.durationSec, endedBy }, 'track ended');
+      // Fim "natural" bem antes da duração conhecida: corte silencioso do stream; loga o estado dos processos.
+      if (endedBy === 'natural' && track.durationSec !== null && playedSec < track.durationSec - EARLY_END_TOLERANCE_SEC) {
+        this.log.warn({ trackId: track.id, playedSec, durationSec: track.durationSec, pipeline: stream.diagnostics() }, 'track ended early');
+      }
+    }
 
     if (failure && track) {
       const playedMs = stream?.resource.playbackDuration ?? 0;

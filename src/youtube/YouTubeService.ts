@@ -40,6 +40,14 @@ export interface ActiveStream {
    * `null` = terminou normalmente, foi morta por nós ou ainda não terminou no prazo.
    */
   failure(timeoutMs: number): Promise<YtError | null>;
+  /** Estado dos processos para log; `null` enquanto o pipeline ainda não terminou. */
+  diagnostics(): StreamDiagnostics | null;
+}
+
+export interface StreamDiagnostics {
+  readonly killed: boolean;
+  readonly ytdlp: { readonly code: number | null; readonly signal: string | null; readonly stderrTail: string };
+  readonly ffmpeg: { readonly code: number | null; readonly signal: string | null; readonly stderrTail: string };
 }
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
@@ -123,7 +131,9 @@ export class YouTubeService {
     });
 
     let settled: YtError | null | undefined;
+    let finished: PipelineResult | null = null;
     const outcome = pipeline.done.then((result) => {
+      finished = result;
       settled = this.interpretPipeline(track, result);
       return settled;
     });
@@ -131,6 +141,15 @@ export class YouTubeService {
     return {
       resource,
       kill: pipeline.kill,
+      diagnostics: () => {
+        if (!finished) return null;
+        const { killed, source, decoder } = finished;
+        return {
+          killed,
+          ytdlp: { code: source.code, signal: source.signal, stderrTail: source.stderr.slice(-1500) },
+          ffmpeg: { code: decoder.code, signal: decoder.signal, stderrTail: decoder.stderr.slice(-1500) },
+        };
+      },
       failure: async (timeoutMs) => {
         if (settled !== undefined) return settled;
         let timer: NodeJS.Timeout | undefined;

@@ -127,3 +127,9 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Decisão:** `GuildPlayer` reinicia o stream da mesma faixa até `MAX_STREAM_RETRIES = 2` vezes quando a falha é `YtError.retriable` e tocou < 2 s; só depois pula e avisa. Contador zera a cada faixa nova.
 - **Contexto:** P-011 (403 intermitente do googlevideo).
 - **Descartado:** `--retries` do yt-dlp (não repete 403; a URL assinada é a mesma); retomar no meio da faixa (exigiria seek com `--download-sections`).
+
+## ADR-025 — Deploy remove comandos globais
+- **Data:** 2026-10-17
+- **Decisão:** o script de registro substitui a lista global por `[]` depois de registrar os comandos da guild.
+- **Contexto:** P-012; a aplicação é dedicada a este bot e só usa comandos por guild.
+- **Descartado:** apagar manualmente uma vez (sobras voltariam a confundir se a aplicação fosse reutilizada).

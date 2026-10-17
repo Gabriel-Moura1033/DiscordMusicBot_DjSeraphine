@@ -58,3 +58,15 @@ Status: `aberto` · `contornado` · `resolvido`.
 - **Causa:** googlevideo recusa a URL assinada de forma intermitente; não é yt-dlp desatualizado (já estava na última versão). O 403 estava classificado como `extractor`, gerando mensagem enganosa.
 - **Solução:** código próprio `forbidden`; falhas `forbidden`/`extractor`/`timeout`/`unknown` antes de 2 s de áudio são tentadas de novo em silêncio (até 2 vezes, extração nova). Se persistir com frequência, avaliar um PO Token provider (ex.: bgutil) — ver 05.
 - **Limitação:** 403 no meio da faixa não é retomado (a faixa é marcada como interrompida).
+
+## P-012 — Comandos globais antigos ("Comando desconhecido")
+- **Status:** resolvido
+- **Sintoma:** `/test` e `/challenge` apareciam no servidor; ao usar, o bot respondia "Comando desconhecido". Log: `unknown command ... name: challenge`.
+- **Causa:** comandos **globais** registrados por um uso anterior da mesma aplicação do Discord.
+- **Solução:** `deploy-commands.ts` agora também apaga os comandos globais (`PUT []`) após registrar os da guild. Removidos em 2026-10-17. Pode levar alguns minutos/Ctrl+R para sumirem do cliente.
+
+## P-013 — Faixa terminou ~40 s antes sem erro
+- **Status:** aberto (em observação)
+- **Sintoma:** `joMjcNtxuTU` (162 s) teve "track started" de novo após 122 s, sem nenhum warn (sem falha do yt-dlp/ffmpeg nem erro do AudioPlayer). Como a mesma faixa recomeçou, provavelmente o loop de faixa estava ligado.
+- **Hipótese:** stream cortado sem erro, ou `failure()` estourou o prazo de 3 s e o fim foi tratado como natural.
+- **Ação:** adicionados logs `track ended` (playedSec, durationSec, endedBy) e `track ended early` (warn, com códigos de saída e stderr dos processos) para diagnosticar na próxima ocorrência.
