@@ -8,13 +8,15 @@ import { baseEmbed, thumbnailUrl } from './embeds.js';
 import { capitalize, deny } from './reply.js';
 import type { Command, JoinContext } from './types.js';
 
+type PlayMode = 'append' | 'now';
+
 function positionLabel(position: number): string {
   return position === 0 ? '▶️ Tocando agora' : `#${position}`;
 }
 
-function singleEmbed(track: TrackInfo, position: number, query: string | null) {
+function singleEmbed(track: TrackInfo, position: number, query: string | null, header: string | null) {
   const embed = baseEmbed()
-    .setAuthor({ name: query !== null ? '🔎 Resultado da busca' : '➕ Adicionado à fila' })
+    .setAuthor({ name: header ?? (query !== null ? '🔎 Resultado da busca' : '➕ Adicionado à fila') })
     .setTitle(truncate(track.title, 256))
     .setURL(track.url)
     .setThumbnail(thumbnailUrl(track))
@@ -28,12 +30,17 @@ function singleEmbed(track: TrackInfo, position: number, query: string | null) {
   return embed;
 }
 
-function playlistEmbed(result: Extract<ResolveResult, { kind: 'playlist' }>, position: number, maxSize: number) {
+function playlistEmbed(
+  result: Extract<ResolveResult, { kind: 'playlist' }>,
+  position: number,
+  maxSize: number,
+  header: string | null,
+) {
   const notes: string[] = [`**${result.tracks.length}** faixas adicionadas.`];
   if (result.skipped > 0) notes.push(`${result.skipped} ignoradas (privadas, removidas, ao vivo ou longas demais).`);
   if (result.truncated) notes.push(`A playlist foi limitada às primeiras ${maxSize} faixas.`);
   return baseEmbed()
-    .setAuthor({ name: '📃 Playlist adicionada' })
+    .setAuthor({ name: header ?? '📃 Playlist adicionada' })
     .setTitle(truncate(result.title, 256))
     .setURL(result.url)
     .setDescription(notes.join('\n'))
@@ -60,57 +67,74 @@ async function connect(ctx: JoinContext): Promise<GuildPlayer | null> {
   }
 }
 
-const command: Command = {
-  guard: 'voice-join',
-  data: new SlashCommandBuilder()
-    .setName('play')
-    .setDescription('Toca um vídeo ou playlist do YouTube, ou busca pelo nome da música')
-    .setContexts(InteractionContextType.Guild)
-    .addStringOption((option) =>
-      option
-        .setName('musica')
-        .setDescription('Link do YouTube (vídeo, shorts ou playlist) ou nome da música')
-        .setRequired(true)
-        .setMaxLength(500),
-    ),
+/** `/play` e `/playnow` compartilham validação, busca e conexão; só muda onde as faixas entram. */
+export function createPlayCommand(name: string, description: string, mode: PlayMode): Command {
+  return {
+    guard: 'voice-join',
+    data: new SlashCommandBuilder()
+      .setName(name)
+      .setDescription(description)
+      .setContexts(InteractionContextType.Guild)
+      .addStringOption((option) =>
+        option
+          .setName('musica')
+          .setDescription('Link do YouTube (vídeo, shorts ou playlist) ou nome da música')
+          .setRequired(true)
+          .setMaxLength(500),
+      ),
 
-  async execute(ctx) {
-    const { interaction, services } = ctx;
-    const parsed = parseInput(interaction.options.getString('musica', true));
-    if (parsed.kind === 'rejected') {
-      await deny(interaction, `❌ ${parsed.reason}`);
-      return;
-    }
-
-    await interaction.deferReply();
-
-    let result: ResolveResult;
-    try {
-      result = await services.youtube.resolve(parsed);
-    } catch (error) {
-      if (error instanceof YtError) {
-        await interaction.editReply(`❌ ${capitalize(error.userMessage)}.`);
+    async execute(ctx) {
+      const { interaction, services } = ctx;
+      const parsed = parseInput(interaction.options.getString('musica', true));
+      if (parsed.kind === 'rejected') {
+        await deny(interaction, `❌ ${parsed.reason}`);
         return;
       }
-      throw error;
-    }
 
-    const player = await connect(ctx);
-    if (!player) return;
+      await interaction.deferReply();
 
-    const requestedBy = { id: interaction.user.id, name: interaction.member.displayName };
-    const withRequester = (info: TrackInfo): Track => ({ ...info, requestedBy });
+      let result: ResolveResult;
+      try {
+        result = await services.youtube.resolve(parsed);
+      } catch (error) {
+        if (error instanceof YtError) {
+          await interaction.editReply(`❌ ${capitalize(error.userMessage)}.`);
+          return;
+        }
+        throw error;
+      }
 
-    if (result.kind === 'single') {
-      const position = player.enqueue([withRequester(result.track)]);
-      const query = parsed.kind === 'search' ? parsed.query : null;
-      await interaction.editReply({ embeds: [singleEmbed(result.track, position, query)] });
-      return;
-    }
+      const player = await connect(ctx);
+      if (!player) return;
 
-    const position = player.enqueue(result.tracks.map(withRequester));
-    await interaction.editReply({ embeds: [playlistEmbed(result, position, services.config.maxPlaylistSize)] });
-  },
-};
+      const requestedBy = { id: interaction.user.id, name: interaction.member.displayName };
+      const withRequester = (info: TrackInfo): Track => ({ ...info, requestedBy });
 
-export default command;
+      const tracks = result.kind === 'single' ? [withRequester(result.track)] : result.tracks.map(withRequester);
+      let position: number;
+      let header: string | null = null;
+      if (mode === 'now') {
+        const interrupted = player.playNow(tracks);
+        position = 0;
+        if (interrupted) header = `⏭️ Pulei "${truncate(interrupted.title, 60)}" — tocando agora`;
+      } else {
+        position = player.enqueue(tracks);
+      }
+
+      if (result.kind === 'single') {
+        const query = parsed.kind === 'search' ? parsed.query : null;
+        await interaction.editReply({ embeds: [singleEmbed(result.track, position, query, header)] });
+        return;
+      }
+      await interaction.editReply({
+        embeds: [playlistEmbed(result, position, services.config.maxPlaylistSize, header)],
+      });
+    },
+  };
+}
+
+export default createPlayCommand(
+  'play',
+  'Toca um vídeo ou playlist do YouTube, ou busca pelo nome da música',
+  'append',
+);

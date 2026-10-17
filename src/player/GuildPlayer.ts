@@ -49,8 +49,10 @@ export class GuildPlayer {
   private readonly audioPlayer: AudioPlayer;
   private readonly log: Logger;
   private active: ActiveStream | null = null;
-  /** Definido por /skip e /stop antes de parar o player; consumido no próximo Idle. */
+  /** Definido por /skip, /stop e /playnow antes de parar o player; consumido no próximo Idle. */
   private pendingAdvance: AdvanceOptions | null = null;
+  /** /playnow já mostra a faixa na resposta; evita o aviso duplicado de "tocando agora". */
+  private quietNextStart = false;
   private volumePercent: number;
   private idleTimer: NodeJS.Timeout | null = null;
   private aloneTimer: NodeJS.Timeout | null = null;
@@ -139,6 +141,23 @@ export class GuildPlayer {
     // A resposta do /play já mostra a faixa; não duplica o aviso de "tocando agora".
     if (startNow) this.playNext({ skip: false, drop: false }, false);
     return position;
+  }
+
+  /**
+   * Coloca `tracks` no início da fila e pula a faixa atual; o resto da fila é preservado.
+   * Retorna a faixa interrompida (`null` se nada tocava).
+   */
+  playNow(tracks: readonly Track[]): Track | null {
+    if (this.destroyed || tracks.length === 0) return null;
+    const current = this.queue.current;
+    if (!current) {
+      this.enqueue(tracks);
+      return null;
+    }
+    this.queue.addFront(tracks);
+    this.quietNextStart = true;
+    this.stopCurrent({ skip: true, drop: false });
+    return current;
   }
 
   nowPlaying(): NowPlaying | null {
@@ -234,7 +253,9 @@ export class GuildPlayer {
     this.clearTimer('idle');
     this.retries = 0;
     this.startStream(track);
-    if (!announce) return;
+    const quiet = this.quietNextStart;
+    this.quietNextStart = false;
+    if (!announce || quiet) return;
     void this.notify(
       `🎶 Tocando agora: ${trackLink(track)} \`${formatDuration(track.durationSec)}\` — pedido por **${track.requestedBy.name}**`,
     );

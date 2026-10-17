@@ -133,3 +133,10 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Decisão:** o script de registro substitui a lista global por `[]` depois de registrar os comandos da guild.
 - **Contexto:** P-012; a aplicação é dedicada a este bot e só usa comandos por guild.
 - **Descartado:** apagar manualmente uma vez (sobras voltariam a confundir se a aplicação fosse reutilizada).
+
+## ADR-026 — /playnow
+- **Data:** 2026-10-17
+- **Decisão:** `/playnow` insere as faixas no início da fila (`Queue.addFront`) e pula a atual com `{ skip: true, drop: false }` — mesma semântica do /skip: a atual é descartada, exceto no loop de fila (vai para o fim). Playlists também são aceitas (entram todas na frente, em ordem). Sem nada tocando, equivale ao /play.
+- **Contexto:** pedido do usuário: "pular a faixa atual e tocar a pedida, sem perder a fila".
+- **Implementação:** `/play` virou fábrica `createPlayCommand` para reaproveitar validação, busca, conexão e embeds; `GuildPlayer.playNow()` + `quietNextStart` (a resposta do comando já mostra a faixa).
+- **Descartado:** devolver a faixa interrompida para a fila (o pedido foi "pular").

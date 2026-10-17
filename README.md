@@ -9,6 +9,7 @@ Contexto do projeto, decisões e problemas conhecidos: [`docs/memoria/00-entrada
 | Comando | O que faz |
 |---|---|
 | `/play musica:<link ou nome>` | Toca/enfileira um vídeo, uma playlist (até `MAX_PLAYLIST_SIZE`) ou o 1º resultado da busca |
+| `/playnow musica:<link ou nome>` | Pula a faixa atual e toca a pedida na hora; o resto da fila continua igual |
 | `/skip` `/stop` `/pause` `/resume` | Controle da reprodução (`/stop` limpa a fila mas mantém o bot no canal) |
 | `/queue` | Fila paginada (10 por página) |
 | `/nowplaying` | Faixa atual com barra de progresso |

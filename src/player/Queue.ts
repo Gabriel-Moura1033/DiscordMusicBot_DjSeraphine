@@ -37,6 +37,11 @@ export class Queue {
     this.items.push(...tracks);
   }
 
+  /** Insere no início dos próximos, mantendo a ordem de `tracks`. */
+  addFront(tracks: readonly Track[]): void {
+    this.items.unshift(...tracks);
+  }
+
   /** Define e retorna a próxima faixa atual (ou `null` se acabou). */
   advance(options: AdvanceOptions): Track | null {
     const previous = this.current;

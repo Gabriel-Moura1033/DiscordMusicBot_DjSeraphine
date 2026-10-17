@@ -60,3 +60,8 @@ Diário cronológico, mais recente por último.
 - "O aplicativo não respondeu": o comando usado era de outra aplicação (sem processo rodando), não da que estava no `.env`. Confirmado via API (`Routes.currentApplication`).
 - Usuário trocou token/client id para a aplicação definitiva e a guild para o servidor onde ela está. Primeira tentativa de deploy deu `Missing Access` (bot não era membro da guild configurada).
 - Deploy ok na guild nova (12 comandos); a nova aplicação também tinha os globais antigos `/test` e `/challenge`, removidos pelo deploy (P-012). Container recriado, "bot ready" em 1 guild.
+
+## 2026-10-17 — Comando /playnow
+- `src/commands/playnow.ts`, fábrica `createPlayCommand` em `play.ts`, `Queue.addFront`, `GuildPlayer.playNow`. README e glossário atualizados.
+- Verificado: typecheck; ordem da fila após /playnow nos 3 modos de loop e com playlist (script). Deploy: 13 comandos na guild; bot reiniciado.
+- Pendente: teste no Discord.

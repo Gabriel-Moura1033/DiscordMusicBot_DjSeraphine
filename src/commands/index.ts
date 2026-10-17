@@ -6,6 +6,7 @@ import loop from './loop.js';
 import nowplaying from './nowplaying.js';
 import pause from './pause.js';
 import play from './play.js';
+import playnow from './playnow.js';
 import queue from './queue.js';
 import remove from './remove.js';
 import { deny, replyUnexpectedError } from './reply.js';
@@ -18,6 +19,7 @@ import volume from './volume.js';
 
 export const commands: readonly Command[] = [
   play,
+  playnow,
   skip,
   stop,
   pause,
