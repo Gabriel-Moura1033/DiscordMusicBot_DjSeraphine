@@ -69,3 +69,6 @@ Diário cronológico, mais recente por último.
 ## 2026-10-17 — Conexão de voz presa
 - Investigado P-015 (bot "tocando" fora do canal). `GuildPlayer`: log de estados da conexão, watchdog com rejoin, `isStale()`; `PlayerManager.get()` descarta players mortos. Typecheck ok; bot reconstruído e reiniciado.
 - Pendente: confirmar em uso; se repetir, os logs `voice connection state` mostram a sequência.
+
+## 2026-10-17 — Causa do P-015
+- Usuário confirmou: PC host em sleep. P-015 atualizado (causa + nota sobre timers e suspensão); README ganhou linha de troubleshooting com `systemd-inhibit`.

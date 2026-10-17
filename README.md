@@ -98,6 +98,7 @@ docker compose exec dj yt-dlp -v -F "https://www.youtube.com/watch?v=ID"
 | Bot entra, mas ninguém ouve | Protocolo E2EE DAVE sem suporte, ou opus ausente | Confirme `@discordjs/voice` ≥ 0.19; rode com `LOG_LEVEL=debug` e veja o *dependency report* no log |
 | Bot sai sozinho logo após entrar | Expulso ou movido (código 4014), ou canal apagado | Normal: ele tenta reconectar por 5 s e depois encerra a sessão da guild |
 | "Não tenho permissão para entrar e falar" | Falta Connect/Speak/View Channel no canal | Ajuste as permissões do cargo do bot no canal |
+| Bot diz que está tocando, mas não está no canal / ficou mudo minutos | Host entrou em suspensão (sleep) e a conexão de voz caiu | Rode em máquina que não suspende, ou bloqueie o sleep enquanto o bot roda: `systemd-inhibit --what=sleep:idle --why="bot de música" sleep infinity` |
 | Slash commands não aparecem | Comandos não registrados, guild errada ou convite sem `applications.commands` | Rode o deploy de novo, confira `DISCORD_GUILD_ID`, reconvide com o link acima e recarregue o Discord (Ctrl+R) |
 | "Comando desconhecido" | Registro desatualizado | Rode o deploy de comandos de novo |
 | Áudio picotando | CPU do host saturada | Verifique `docker stats`; a codificação Opus roda no processo Node |
