@@ -75,3 +75,10 @@ Status: `aberto` · `contornado` · `resolvido`.
 - **Status:** resolvido (configuração)
 - **Causas vistas:** (1) usar no Discord o comando de **outra aplicação** com o mesmo nome de comando; o log do bot fica vazio. (2) `DISCORD_GUILD_ID` de um servidor onde o bot não está → deploy falha com `Missing Access`.
 - **Diagnóstico rápido:** conferir no log o `user` do "bot ready" e se a interação aparece; `Routes.userGuilds()` lista onde o bot está.
+
+## P-015 — Bot responde "tocando" mas não está no canal de voz
+- **Status:** contornado (aguardando confirmação em uso)
+- **Sintoma:** /play respondeu "Tocando agora" sem o bot estar no canal. Log: sem novo "joined voice channel" (player antigo reutilizado). API do Discord: `GET /guilds/{id}/voice-states/{bot}` → 404 Unknown Voice State. Antes disso, uma faixa de 259 s levou 447 s de relógio (≈3 min em auto-pausa: `NoSubscriberBehavior.Pause` pausa quando a conexão não está Ready).
+- **Causa provável:** conexão caiu e a lib começou a reconectar, mas travou em Signalling/Connecting; `onDisconnected` só tratava "não saiu de Disconnected em 5 s". Sem logs de estado da conexão, a sequência exata não foi capturada.
+- **Solução:** log de toda transição de estado da conexão (`voice connection state`); watchdog de 20 s fora de Ready → `rejoin()` (1×) → se falhar, avisa e destrói; `GuildPlayer.isStale()` (destruída, presa fora de Ready ou bot ausente do canal segundo o cache de voice states) faz `PlayerManager.get()` descartar o player para o /play reconectar.
+- **Limitação:** quando o watchdog desiste, a fila da guild é perdida.

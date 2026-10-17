@@ -140,3 +140,9 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Contexto:** pedido do usuário: "pular a faixa atual e tocar a pedida, sem perder a fila".
 - **Implementação:** `/play` virou fábrica `createPlayCommand` para reaproveitar validação, busca, conexão e embeds; `GuildPlayer.playNow()` + `quietNextStart` (a resposta do comando já mostra a faixa).
 - **Descartado:** devolver a faixa interrompida para a fila (o pedido foi "pular").
+
+## ADR-027 — Watchdog da conexão de voz e descarte de player "stale"
+- **Data:** 2026-10-17
+- **Decisão:** fora de Ready por 20 s → `connection.rejoin()` uma vez; mais 20 s sem Ready → aviso + `destroy()`. `PlayerManager.get()` destrói players `isStale()` antes de qualquer comando usá-los.
+- **Contexto:** P-015.
+- **Descartado:** reconectar mantendo a mesma instância de `GuildPlayer` (exigiria trocar a `VoiceConnection` e religar listeners; adiado — ver 05).

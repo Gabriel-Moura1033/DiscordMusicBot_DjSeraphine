@@ -11,6 +11,7 @@
 - [ ] `/seek <mm:ss>` (exige reiniciar o pipeline com `--download-sections` ou `-ss` no ffmpeg)
 - [ ] Pré-resolver/pré-aquecer a próxima faixa para reduzir silêncio entre músicas
 - [ ] `/move <de> <para>` na fila
+- [ ] Preservar a fila quando a conexão de voz morre (reconectar o mesmo `GuildPlayer` em vez de destruir) — P-015
 - [ ] Se o 403 (P-011) continuar frequente: PO Token provider (plugin bgutil para yt-dlp) no container
 - [ ] Healthcheck do container (estado do gateway)
 

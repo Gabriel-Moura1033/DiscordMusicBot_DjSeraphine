@@ -65,3 +65,7 @@ Diário cronológico, mais recente por último.
 - `src/commands/playnow.ts`, fábrica `createPlayCommand` em `play.ts`, `Queue.addFront`, `GuildPlayer.playNow`. README e glossário atualizados.
 - Verificado: typecheck; ordem da fila após /playnow nos 3 modos de loop e com playlist (script). Deploy: 13 comandos na guild; bot reiniciado.
 - Pendente: teste no Discord.
+
+## 2026-10-17 — Conexão de voz presa
+- Investigado P-015 (bot "tocando" fora do canal). `GuildPlayer`: log de estados da conexão, watchdog com rejoin, `isStale()`; `PlayerManager.get()` descarta players mortos. Typecheck ok; bot reconstruído e reiniciado.
+- Pendente: confirmar em uso; se repetir, os logs `voice connection state` mostram a sequência.

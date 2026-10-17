@@ -13,8 +13,15 @@ export class PlayerManager {
     private readonly youtube: YouTubeService,
   ) {}
 
+  /** Descarta players com conexão morta, para o próximo /play reconectar do zero. */
   get(guildId: string): GuildPlayer | undefined {
-    return this.players.get(guildId);
+    const player = this.players.get(guildId);
+    if (player?.isStale()) {
+      player.destroy('stale voice connection');
+      this.players.delete(guildId);
+      return undefined;
+    }
+    return player;
   }
 
   async getOrCreate(
@@ -22,8 +29,8 @@ export class PlayerManager {
     voiceChannel: VoiceBasedChannel,
     textChannel: GuildTextBasedChannel,
   ): Promise<GuildPlayer> {
-    const existing = this.players.get(guild.id);
-    if (existing && !existing.isDestroyed) return existing;
+    const existing = this.get(guild.id);
+    if (existing) return existing;
 
     const pending = this.connecting.get(guild.id);
     if (pending) return pending;

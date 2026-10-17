@@ -19,6 +19,9 @@ import { Queue, type AdvanceOptions, type LoopMode } from './Queue.js';
 
 const CONNECT_TIMEOUT_MS = 20_000;
 const RECONNECT_TIMEOUT_MS = 5_000;
+/** Fora de Ready por mais que isso: tenta rejoin(); se falhar de novo, encerra. */
+const READY_WATCHDOG_MS = 20_000;
+const MAX_REJOINS = 1;
 /** Quanto esperar o yt-dlp sair depois que o áudio acabou, para saber se foi falha. */
 const FAILURE_GRACE_MS = 3_000;
 /** Abaixo disso, uma falha é "não consegui tocar"; acima, "foi interrompida". */
@@ -57,6 +60,10 @@ export class GuildPlayer {
   private idleTimer: NodeJS.Timeout | null = null;
   private aloneTimer: NodeJS.Timeout | null = null;
   private destroyed = false;
+  private readyWatchdog: NodeJS.Timeout | null = null;
+  private rejoins = 0;
+  /** Momento em que a conexão saiu de Ready (`null` = está Ready). */
+  private notReadySince: number | null = null;
   private retries = 0;
 
   private constructor(
@@ -81,6 +88,11 @@ export class GuildPlayer {
       this.log.warn({ err: error }, 'audio player error');
     });
 
+    this.connection.on('stateChange', (oldState, newState) => {
+      if (oldState.status === newState.status) return;
+      this.log.info({ from: oldState.status, to: newState.status }, 'voice connection state');
+      this.onConnectionState(newState.status);
+    });
     this.connection.on(VoiceConnectionStatus.Disconnected, () => void this.onDisconnected());
     this.connection.on(VoiceConnectionStatus.Destroyed, () => this.destroy('connection destroyed'));
     this.connection.on('error', (error) => this.log.warn({ err: error }, 'voice connection error'));
@@ -122,6 +134,21 @@ export class GuildPlayer {
 
   get isDestroyed(): boolean {
     return this.destroyed;
+  }
+
+  /**
+   * Conexão que não serve mais: destruída, presa fora de Ready além do watchdog, ou
+   * "Ready" localmente enquanto o Discord diz que o bot não está no canal.
+   */
+  isStale(): boolean {
+    if (this.destroyed) return true;
+    const status = this.connection.state.status;
+    if (status === VoiceConnectionStatus.Destroyed) return true;
+    if (status !== VoiceConnectionStatus.Ready) {
+      return this.notReadySince !== null && Date.now() - this.notReadySince > READY_WATCHDOG_MS * (MAX_REJOINS + 1);
+    }
+    const actualChannelId = this.guild.members.me?.voice.channelId ?? null;
+    return actualChannelId !== this.voiceChannelId;
   }
 
   get volume(): number {
@@ -225,6 +252,8 @@ export class GuildPlayer {
     this.destroyed = true;
     this.clearTimer('idle');
     this.clearTimer('alone');
+    if (this.readyWatchdog) clearTimeout(this.readyWatchdog);
+    this.readyWatchdog = null;
     this.queue.reset();
     this.active?.kill();
     this.active = null;
@@ -308,6 +337,38 @@ export class GuildPlayer {
 
     // Falha conta como skip + drop: evita loop infinito tentando tocar a mesma faixa quebrada.
     this.playNext(requested ?? (failure ? { skip: true, drop: true } : { skip: false, drop: false }));
+  }
+
+  private onConnectionState(status: VoiceConnectionStatus): void {
+    if (this.destroyed) return;
+    if (status === VoiceConnectionStatus.Ready) {
+      this.notReadySince = null;
+      this.rejoins = 0;
+      if (this.readyWatchdog) clearTimeout(this.readyWatchdog);
+      this.readyWatchdog = null;
+      return;
+    }
+    this.notReadySince ??= Date.now();
+    this.armReadyWatchdog();
+  }
+
+  /** Cobre o caso em que a lib começa a reconectar e trava em Signalling/Connecting. */
+  private armReadyWatchdog(): void {
+    if (this.readyWatchdog || this.destroyed) return;
+    this.readyWatchdog = setTimeout(() => {
+      this.readyWatchdog = null;
+      if (this.destroyed || this.connection.state.status === VoiceConnectionStatus.Ready) return;
+      if (this.rejoins < MAX_REJOINS) {
+        this.rejoins++;
+        this.log.warn({ status: this.connection.state.status, attempt: this.rejoins }, 'voice connection stuck, rejoining');
+        this.connection.rejoin();
+        this.armReadyWatchdog();
+        return;
+      }
+      this.log.warn({ status: this.connection.state.status }, 'voice connection did not recover');
+      void this.notify('🔌 Perdi a conexão de voz e não consegui reconectar. Use `/play` para me chamar de novo.');
+      this.destroy('voice connection stuck');
+    }, READY_WATCHDOG_MS);
   }
 
   private async onDisconnected(): Promise<void> {
