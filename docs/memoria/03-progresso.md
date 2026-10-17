@@ -36,3 +36,8 @@ Diário cronológico, mais recente por último.
 - `podman compose config` valida o compose.
 - Salas 00 e 05 atualizadas com o estado da v0.1.0.
 - Pendente: teste em servidor real (ver 05).
+
+## 2026-10-17 — Primeira execução real
+- Credenciais tinham sido preenchidas no `.env.example` (versionado); movidas para `.env` (chmod 600) antes de qualquer commit e `.env.example` restaurado. Histórico verificado sem token.
+- `podman compose build` + deploy de comandos: 12 comandos registrados na guild. `podman compose up -d`: entrypoint ok, binários ok, gateway conectado ("bot ready", bot presente em 2 guilds; comandos só na guild do `.env`).
+- Pendente: testes de voz no Discord (ver 05).
