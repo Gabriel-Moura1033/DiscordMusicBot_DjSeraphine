@@ -25,3 +25,8 @@ Diário cronológico, mais recente por último.
 - `src/commands/*` (12 comandos, guards, respostas, embeds, roteador), `src/index.ts`, `src/deploy-commands.ts`.
 - Verificado: `tsc` limpo, sem `any`; build roda, checa yt-dlp/ffmpeg no start, falha controlada com token inválido; JSON dos comandos gerado; lógica de loop/skip/drop da fila testada em script.
 - Pendente: Docker, README, teste real em servidor.
+
+## 2026-10-17 — Container
+- `Dockerfile` (multi-stage: deps com toolchain p/ @discordjs/opus, build TS, runtime node:24-bookworm-slim + ffmpeg + deno + yt-dlp_linux), `docker-entrypoint.sh`, `docker-compose.yml` (init, tmpfs /tmp, logs rotacionados), `.dockerignore`, `.env.example`.
+- Testado com podman 6.1: opus nativo carrega; busca no container ~1,5 s; 3 kills seguidos + faixa completa sem processos restantes e `/tmp` vazio; update sem rede gera aviso e o bot sobe.
+- Corrigidos P-009 e P-010 (ver 04).

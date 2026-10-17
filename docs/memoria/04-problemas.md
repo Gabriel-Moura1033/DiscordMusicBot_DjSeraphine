@@ -40,3 +40,14 @@ Status: `aberto` · `contornado` · `resolvido`.
 - **Status:** resolvido
 - **Sintoma:** `install scripts blocked because they are not covered by allowScripts`; `@discordjs/opus` fica sem binário nativo.
 - **Solução:** `npm install-scripts approve @discordjs/opus esbuild` (grava `allowScripts` no `package.json`). Ao atualizar versões, aprovar de novo.
+
+## P-009 — yt-dlp standalone vaza /tmp/_MEI* quando morto com SIGKILL
+- **Status:** resolvido
+- **Sintoma:** cada execução do `yt-dlp_linux` (PyInstaller onefile) extrai ~30 MB em `/tmp/_MEIxxxx`; com SIGKILL o bootloader não limpa, e cada /skip vazaria um diretório.
+- **Solução:** `terminateGroup()` manda SIGTERM ao process group (o bootloader repassa e limpa) e só faz SIGKILL após 2 s se o líder não saiu. `/tmp` em tmpfs no compose como rede de segurança. Verificado no container: `/tmp` vazio após kills seguidos.
+
+## P-010 — ffmpeg ignora SIGTERM e 'close' nunca dispara após kill
+- **Status:** resolvido
+- **Sintoma:** após `kill()`, `failure()` sempre esgotava o timeout; ffmpeg sobrevivia até o SIGKILL. Num teste anterior o processo ficou preso por minutos.
+- **Causa:** ffmpeg bloqueado escrevendo num stdout sem leitor trata SIGTERM só depois do write; e o Node só emite `close` quando os pipes fecham.
+- **Solução:** `kill()` faz `destroy()` em `src.stdout`, `dec.stdin` e `dec.stdout` antes de sinalizar. Tudo termina em < 300 ms. (Em uso real o `@discordjs/voice` já destrói o `playStream` no stop, mas o pipeline não depende mais disso.)

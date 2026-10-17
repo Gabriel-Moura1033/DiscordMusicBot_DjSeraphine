@@ -106,3 +106,18 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Decisão:** `spawn(..., { detached: true })` e `process.kill(-pid, 'SIGKILL')`.
 - **Contexto:** o binário standalone do yt-dlp (PyInstaller onefile) é um bootloader que faz fork do interpretador; o yt-dlp ainda pode iniciar o Deno. SIGKILL só no pid principal deixaria órfãos.
 - **Descartado:** `child.kill()` simples.
+
+## ADR-021 — SIGTERM → SIGKILL na morte dos processos
+- **Data:** 2026-10-17
+- **Decisão:** `kill()` fecha os pipes, manda SIGTERM ao grupo e SIGKILL após 2 s só se o líder ainda estiver vivo. No `exit` do Node, SIGKILL direto. Atualiza ADR-004/ADR-020.
+- **Contexto:** P-009 e P-010.
+- **Descartado:** SIGKILL imediato (vaza `/tmp/_MEI*` do PyInstaller).
+
+## ADR-022 — Deno via imagem oficial `denoland/deno:bin`
+- **Data:** 2026-10-17
+- **Decisão:** `COPY --from=docker.io/denoland/deno:${DENO_IMAGE_TAG}` (padrão `bin`). Imagens com nome totalmente qualificado (`docker.io/...`) para funcionar no podman sem short-name resolution.
+- **Descartado:** baixar o zip do GitHub (precisaria mapear arquitetura e unzip).
+
+## ADR-023 — Entrypoint atualiza o yt-dlp sem bloquear o start
+- **Data:** 2026-10-17
+- **Decisão:** `docker-entrypoint.sh` roda `yt-dlp --update-to stable` com `timeout 90`; falha imprime aviso + últimas linhas do erro e segue com `exec "$@"`. Binário em `/opt/yt-dlp` (dono `node`).

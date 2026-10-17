@@ -1,0 +1,19 @@
+services:
+  dj:
+    build: .
+    image: dj-bot:latest
+    container_name: dj
+    restart: unless-stopped
+    # tini como PID 1: recolhe processos órfãos e repassa SIGTERM ao Node.
+    init: true
+    env_file: .env
+    # /tmp em memória: o yt-dlp standalone extrai ~30 MB por execução ali; reiniciar limpa tudo.
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    mem_limit: 768m
+    stop_grace_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
