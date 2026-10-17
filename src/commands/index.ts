@@ -1,6 +1,7 @@
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { logger } from '../logger.js';
 import { runGuarded } from './guards.js';
+import autoplay from './autoplay.js';
 import clear from './clear.js';
 import leave from './leave.js';
 import loop from './loop.js';
@@ -43,6 +44,7 @@ export const commands: readonly Command[] = [
   clear,
   shuffle,
   loop,
+  autoplay,
   volume,
   leave,
 ];

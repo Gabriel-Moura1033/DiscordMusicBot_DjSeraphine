@@ -20,6 +20,7 @@ Contexto do projeto, decisões e problemas conhecidos: [`docs/memoria/00-entrada
 | `/nowplaying` | Faixa atual com barra de progresso e botões de controle |
 | `/remove posicao:<n>` `/move de:<n> para:<n>` `/shuffle` `/loop modo:<desligado\|faixa\|fila>` | Edição da fila |
 | `/clear` | Limpa a fila sem parar a faixa atual |
+| `/autoplay` | Liga/desliga: quando a fila acaba, segue com músicas do mix do YouTube da última faixa (marcadas com 🤖) |
 | `/volume nivel:<0-100>` | Volume (efeito imediato) |
 | `/leave` | Sai do canal e descarta a fila |
 
@@ -93,6 +94,7 @@ Os testes são **puros**: um setup global faz `spawn`/`exec` e `fetch` lançarem
 
 - **Botões** ⏯️ ⏭️ 🔁 ⏹️ aparecem no aviso "tocando agora", na resposta do `/play` que começa a tocar na hora e no `/nowplaying`. Valem as mesmas regras dos comandos: só quem está no canal de voz do bot. 🔁 cicla off → faixa → fila. Quando a faixa termina, os botões daquela mensagem são desativados.
 - **Autocomplete do `/play`:** a partir de 3 letras sugere até 5 vídeos (a sugestão escolhida vira o link). Cada sugestão é uma busca no YouTube; resultados ficam em cache por `AUTOCOMPLETE_CACHE_TTL_SECONDS`. Se a busca demorar, a lista vem vazia e você pode mandar o texto mesmo assim.
+- **Autoplay:** com `/autoplay` ligado, quando começa a última faixa da fila o bot já escolhe a próxima no mix do YouTube dela (sem repetir o que tocou recentemente nem outra versão da mesma música). Se você pedir algo nesse meio tempo, sua música vem primeiro. `/stop` não aciona o autoplay; o bot ainda sai se ficar sozinho no canal.
 - **Presença:** o bot mostra "Ouvindo <título>". Em mais de um servidor, mostra a faixa que começou por último; pausar não muda.
 
 ## Variáveis de ambiente
@@ -111,6 +113,8 @@ Veja [`.env.example`](.env.example). Obrigatórias: `DISCORD_TOKEN`, `DISCORD_CL
 | `Sign in to confirm your age` | Vídeo com restrição de idade | Sem cookies não há como tocar; o bot pula e avisa |
 | Desafios JS / `No supported JavaScript runtime` | Deno ausente | `docker compose exec dj deno --version`; a imagem já inclui |
 | `/seek` responde "Não consegui mudar a posição" | yt-dlp falhou ao abrir o stream na nova posição (já tenta 3×) | A música segue de onde estava; tente de novo. Veja `seek failed` no log |
+| "🤖 Autoplay: não achei uma próxima faixa" | O mix da última faixa não tem nada que ainda não tenha tocado, ou o YouTube recusou a busca | Use `/play`; o autoplay segue a partir da nova faixa. Veja `autoplay:` no log |
+| Autoplay repete o mesmo artista | O mix do YouTube é montado em torno da faixa-semente | Normal; peça uma música de outro estilo e o autoplay segue a partir dela |
 | `/seek` demora | O áudio até o ponto pedido é baixado e descartado (ADR-035); em vídeos longos chega a ~7 s | Normal; a faixa continua tocando enquanto isso |
 | Busca retorna o vídeo errado | `ytsearch1` pega só o 1º resultado | Use `/search` para escolher, o autocomplete do `/play`, ou o link direto |
 | Autocomplete não sugere nada | Texto com menos de 3 letras, link, busca lenta (> ~2 s) ou `AUTOCOMPLETE_ENABLED=false` | Digite mais um pouco (a busca segue em segundo plano e a próxima tecla usa o cache) ou envie o texto: o `/play` busca do mesmo jeito |

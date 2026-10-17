@@ -1,7 +1,7 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
 import { playerControlRow } from '../interactions/controls.js';
 import { formatDuration, progressBar, truncate } from '../util/format.js';
-import { baseEmbed, LOOP_LABELS, thumbnailUrl } from './embeds.js';
+import { baseEmbed, LOOP_LABELS, requesterLabel, thumbnailUrl } from './embeds.js';
 import { deny } from './reply.js';
 import type { Command } from './types.js';
 
@@ -29,7 +29,7 @@ const command: Command = {
         `${progressBar(elapsedSec, track.durationSec)}\n\`${formatDuration(elapsedSec)} / ${formatDuration(track.durationSec)}\``,
       )
       .addFields(
-        { name: 'Pedido por', value: track.requestedBy.name, inline: true },
+        { name: 'Pedido por', value: requesterLabel(track), inline: true },
         { name: 'Volume', value: `${player.volume}%`, inline: true },
         { name: 'Loop', value: LOOP_LABELS[player.loopMode], inline: true },
       );

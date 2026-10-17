@@ -11,6 +11,8 @@ export interface Config {
   readonly idleTimeoutMs: number;
   readonly defaultVolume: number;
   readonly historySize: number;
+  readonly autoplayDefault: boolean;
+  readonly autoplayRecentLimit: number;
   readonly ytdlpPath: string;
   readonly ffmpegPath: string;
   readonly logLevel: string;
@@ -90,6 +92,8 @@ function loadConfig(): Config {
     idleTimeoutMs: integer('IDLE_TIMEOUT_SECONDS', 300, 10, 86_400) * 1000,
     defaultVolume: integer('DEFAULT_VOLUME', 50, 0, 100),
     historySize: integer('HISTORY_SIZE', 20, 1, 100),
+    autoplayDefault: boolean('AUTOPLAY_DEFAULT', false),
+    autoplayRecentLimit: integer('AUTOPLAY_RECENT_LIMIT', 50, 5, 500),
     ytdlpPath: optional('YTDLP_PATH', 'yt-dlp'),
     ffmpegPath: optional('FFMPEG_PATH', 'ffmpeg'),
     logLevel,

@@ -51,7 +51,7 @@ function render(player: GuildPlayer, page: number, idPrefix: string) {
     .setTitle('📜 Fila')
     .setDescription(lines.join('\n'))
     .setFooter({
-      text: `Página ${current + 1}/${pages} · ${upcoming.length} faixa(s) · ${totalLabel} · loop: ${LOOP_LABELS[player.loopMode]} · volume: ${player.volume}%`,
+      text: `Página ${current + 1}/${pages} · ${upcoming.length} faixa(s) · ${totalLabel} · loop: ${LOOP_LABELS[player.loopMode]} · autoplay: ${player.autoplay ? 'ligado' : 'desligado'} · volume: ${player.volume}%`,
     });
 
   const components =

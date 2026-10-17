@@ -36,6 +36,12 @@
 - Histórico: `onTrackEnd` faz `history.push(track)` se houve áudio (`playbackDuration > 0`).
 - `/seek t` e `/replay` (= seek 0): `GuildPlayer.seek()` abre novo pipeline com `ffmpeg -ss t` (antes do `-i pipe:0`), espera `waitForAudio` (dados no `playStream`; `readable` sem dados = fim/falha), até 2 novas tentativas em falha retentável, e só então `audioPlayer.play(novo)` + `kill()` do antigo. Trocar recurso com o player ativo não passa por Idle, então a fila não avança. Se a faixa mudar no meio (`active !== before` ou nova geração), o stream novo é descartado.
 
+## Autoplay (Fase 4)
+- `playNext()` → após `trackStarted`, `maybePrefetchAutoplay()`: autoplay ligado, fila vazia e loop off → `fetchAutoplay(atual)` (busca antecipada).
+- `fetchAutoplay(seed)` → `youtube.mix(id)` (`watch?v=ID&list=RDID`, flat, 25 itens, ~1,4 s) → `onAutoplayResult`: descarta se a geração mudou, ou se a fila mudou (atual ≠ semente ou fila com itens); senão escolhe com `pickAutoplayCandidate` evitando histórico + recentes do autoplay + fila + atual + semente, e enfileira (ou toca, se a fila já tinha acabado).
+- Fim da fila → `onQueueEnd(seed = anterior ?? history[0], stopped)` → `queueEndAction`: `idle` (arma timer), `wait` (busca da mesma semente em andamento), `fetch`, `exhausted` (avisa + timer). Enquanto busca com a fila parada, o timer de inatividade fica desarmado; o timer de "sozinho" é independente.
+- `/stop` marca `stopRequested` e cancela buscas (`autoplayGeneration++`); desligar o autoplay também tira da fila as faixas com `autoplayFrom`.
+
 ## Estado por guild (`GuildPlayer`)
 - `connection: VoiceConnection`, `audioPlayer: AudioPlayer`
 - `queue: Queue` (current, upcoming, loopMode)

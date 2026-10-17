@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type Message, type MessageEditOptions } from 'discord.js';
-import { baseEmbed, thumbnailUrl } from '../commands/embeds.js';
+import { baseEmbed, requesterLabel, thumbnailUrl } from '../commands/embeds.js';
 import { logger } from '../logger.js';
 import type { GuildPlayer, PlayerEvents } from '../player/GuildPlayer.js';
 import type { LoopMode } from '../player/Queue.js';
@@ -127,7 +127,7 @@ export class ControlPanels implements PlayerEvents {
       .setTitle(truncate(track.title, 256))
       .setURL(track.url)
       .setThumbnail(thumbnailUrl(track))
-      .setDescription(`\`${formatDuration(track.durationSec)}\` · pedido por **${track.requestedBy.name}**`);
+      .setDescription(`\`${formatDuration(track.durationSec)}\` · pedido por **${requesterLabel(track)}**`);
     let message: Message<true>;
     try {
       message = await player.textChannel.send({

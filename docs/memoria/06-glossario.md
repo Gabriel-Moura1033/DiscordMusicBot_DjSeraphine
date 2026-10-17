@@ -26,6 +26,9 @@
 - **startOffsetSec** — posição em que o stream atual começou (/seek); somada ao `playbackDuration` no /nowplaying e nos logs.
 - **SeekResult** — `ok` | `idle` | `busy` (entre faixas) | `superseded` (faixa mudou/outro seek) | `failed` (`YtError`).
 - **isChangingTrack** — `GuildPlayer`: player Idle com faixa atual = `onTrackEnd` em andamento; /skipto, /previous e /seek recusam com "tente de novo".
+- **Autoplay** — `src/player/autoplay.ts` (puro: `titleKey`, `buildAvoid`, `pickAutoplayCandidate`, `queueEndAction`, `RecentTracks`) + estado no `GuildPlayer` (`autoplayPending`, `autoplayGeneration`, `autoplayFailedSeedId`). **Semente** = faixa cujo mix é consultado.
+- **autoplayFrom** — campo opcional de `Track`: título da semente; marca faixas do autoplay (`requesterLabel()` em `embeds.ts`).
+- **titleKey** — título normalizado (sem parênteses, feat., acentos, pontuação e palavras de versão) para não tocar outra versão da mesma música.
 - **GuildRequester** — o que os guards (`checkJoin`, `checkPlayer`) leem de uma interação; vale para comandos e componentes.
 
 ## Convenções de código
@@ -48,6 +51,8 @@
 | `IDLE_TIMEOUT_SECONDS` | não | 300 | sozinho no canal / fila vazia até desconectar |
 | `DEFAULT_VOLUME` | não | 50 | volume inicial (0–100) |
 | `HISTORY_SIZE` | não | 20 | faixas lembradas por guild para o /previous (1–100) |
+| `AUTOPLAY_DEFAULT` | não | `false` | autoplay ligado ao conectar |
+| `AUTOPLAY_RECENT_LIMIT` | não | 50 | faixas do autoplay evitadas além do histórico (5–500) |
 | `YTDLP_PATH` | não | `yt-dlp` | binário do yt-dlp |
 | `FFMPEG_PATH` | não | `ffmpeg` | binário do ffmpeg |
 | `YTDLP_AUTO_UPDATE` | não | `true` | `yt-dlp -U` no entrypoint do container |

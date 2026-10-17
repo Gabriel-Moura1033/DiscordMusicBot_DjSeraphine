@@ -81,6 +81,13 @@ export class Queue {
     return skipped.length;
   }
 
+  /** Remove os próximos que satisfazem `predicate`; retorna quantos saíram. */
+  removeWhere(predicate: (track: Track) => boolean): number {
+    const before = this.items.length;
+    this.items = this.items.filter((track) => !predicate(track));
+    return before - this.items.length;
+  }
+
   shuffle(): void {
     for (let i = this.items.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));

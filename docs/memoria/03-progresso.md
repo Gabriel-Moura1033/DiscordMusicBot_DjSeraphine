@@ -92,3 +92,9 @@ Diário cronológico, mais recente por último.
 - Testes: 205 (+48). Destaque: /skipto comparado com /skip repetido em 12 combinações (3 loops × 4 posições).
 - Teste de integração no container com o código compilado (`createStream` + `waitForAudio` reais): achou P-019 e um 403 no seek sem retry → seek ganhou as mesmas 2 novas tentativas silenciosas. Sem processos nem `_MEI` restantes.
 - Pendente: teste no Discord (seek/replay/previous com áudio real).
+
+## 2026-10-17 — Fase 4: autoplay
+- `/autoplay` (21 comandos), `src/player/autoplay.ts`, `YouTubeService.mix()` + `playableEntries()` (também usado pela busca), `Queue.removeWhere`, `Track.autoplayFrom`, `requesterLabel()` nos embeds, autoplay no rodapé do /queue. Config `AUTOPLAY_DEFAULT`, `AUTOPLAY_RECENT_LIMIT`. ADR-037.
+- Testes: 228 (+23): `titleKey` com títulos reais, escolha do candidato (semente, recentes, versões, duração), `queueEndAction` (regra do timer), `RecentTracks`, `removeWhere`, parse do JSON do mix.
+- Validado no container com código compilado: cadeia de 6 faixas (~1,4 s por mix, uma de 3,6 s), sem processos restantes; deploy com 21 comandos; `healthy`.
+- Pendente: teste no Discord (transição sem silêncio, timer de inatividade, /stop).

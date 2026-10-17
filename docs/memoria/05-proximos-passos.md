@@ -4,7 +4,7 @@
 - [x] Fase 1 — Testes e operação
 - [x] Fase 2 — Interface no chat (botões, /search, autocomplete, presença) — falta teste no Discord
 - [x] Fase 3 — Comandos de fila (/move, /skipto, /clear, histórico, /previous, /replay, /seek) — falta teste no Discord
-- [ ] Fase 4 — Autoplay
+- [x] Fase 4 — Autoplay — falta teste no Discord
 - [ ] Fase 5 — Qualidade de áudio (loudnorm, pré-carga, SponsorBlock, /filtro)
 - [ ] Fase 6 — Persistência SQLite
 

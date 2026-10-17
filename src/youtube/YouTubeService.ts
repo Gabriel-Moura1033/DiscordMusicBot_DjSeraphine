@@ -17,6 +17,8 @@ export interface TrackInfo {
 
 export interface Track extends TrackInfo {
   readonly requestedBy: { readonly id: string; readonly name: string };
+  /** Escolhida pelo autoplay a partir do mix desta faixa (título da semente). */
+  readonly autoplayFrom?: string;
 }
 
 export type ResolveResult =
@@ -100,6 +102,21 @@ function toTrackInfo(entry: JsonRecord): TrackInfo | null {
     uploader: getString(entry, 'uploader') ?? getString(entry, 'channel'),
   };
 }
+
+/** Entradas tocáveis de um resultado flat (busca, mix): sem lives, privados ou acima do limite de duração. */
+export function playableEntries(json: JsonRecord, maxDurationSec: number): TrackInfo[] {
+  const tracks: TrackInfo[] = [];
+  for (const entry of getRecords(json, 'entries')) {
+    const track = toTrackInfo(entry);
+    if (!track || isLive(entry) || isUnplayableEntry(entry)) continue;
+    if (track.durationSec !== null && track.durationSec > maxDurationSec) continue;
+    tracks.push(track);
+  }
+  return tracks;
+}
+
+/** Tamanho do mix pedido ao YouTube para o autoplay (ordem de relevância). */
+const MIX_SIZE = 25;
 
 export class YouTubeService {
   constructor(private readonly config: Config) {}
@@ -256,14 +273,18 @@ export class YouTubeService {
   /** Até `limit` resultados tocáveis (sem lives nem vídeos acima do limite de duração). */
   async search(query: string, limit: number, timeoutMs = RESOLVE_TIMEOUT_MS): Promise<TrackInfo[]> {
     const json = await this.runJson(['--flat-playlist', '--', `ytsearch${limit}:${query}`], timeoutMs);
-    const tracks: TrackInfo[] = [];
-    for (const entry of getRecords(json, 'entries')) {
-      const track = toTrackInfo(entry);
-      if (!track || isLive(entry) || isUnplayableEntry(entry)) continue;
-      if (track.durationSec !== null && track.durationSec > this.config.maxTrackDurationSec) continue;
-      tracks.push(track);
-    }
-    return tracks;
+    return playableEntries(json, this.config.maxTrackDurationSec);
+  }
+
+  /** Mix do YouTube (`list=RD<id>`) do vídeo: relacionados em ordem de relevância; o 1º é o próprio vídeo. */
+  async mix(videoId: string): Promise<TrackInfo[]> {
+    if (!VIDEO_ID.test(videoId)) throw new YtError('unknown', 'ID de vídeo inválido para o autoplay');
+    const url = `${videoUrl(videoId)}&list=RD${videoId}`;
+    const json = await this.runJson(
+      ['--flat-playlist', '--yes-playlist', '--playlist-end', String(MIX_SIZE), '--', url],
+      RESOLVE_TIMEOUT_MS,
+    );
+    return playableEntries(json, this.config.maxTrackDurationSec);
   }
 
   private async resolvePlaylist(url: string): Promise<ResolveResult> {

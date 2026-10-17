@@ -14,7 +14,8 @@ import type { Config } from '../config.js';
 import { logger } from '../logger.js';
 import { trackLink } from '../util/format.js';
 import { YtError } from '../youtube/errors.js';
-import type { ActiveStream, Track, YouTubeService } from '../youtube/YouTubeService.js';
+import type { ActiveStream, Track, TrackInfo, YouTubeService } from '../youtube/YouTubeService.js';
+import { AUTOPLAY_REQUESTER, buildAvoid, pickAutoplayCandidate, queueEndAction, RecentTracks } from './autoplay.js';
 import { History } from './History.js';
 import { Queue, type AdvanceOptions, type LoopMode } from './Queue.js';
 
@@ -91,6 +92,10 @@ export function waitForAudio(stream: ActiveStream, timeoutMs: number): Promise<'
   });
 }
 
+function autoplayExhaustedMessage(seed: Track): string {
+  return `🤖 Autoplay: não achei uma próxima faixa a partir de ${trackLink(seed)} que ainda não tenha tocado. Use \`/play\` para continuar.`;
+}
+
 export class VoiceConnectError extends Error {
   override readonly name = 'VoiceConnectError';
 }
@@ -121,6 +126,15 @@ export class GuildPlayer {
   private seekGeneration = 0;
   /** /previous: a faixa interrompida volta para a fila, não para o histórico. */
   private skipHistoryOnce = false;
+  /** /stop: o próximo fim de fila não aciona o autoplay. */
+  private stopRequested = false;
+  private autoplayEnabled: boolean;
+  private readonly autoplayRecent: RecentTracks<Track>;
+  /** Incrementado para invalidar buscas de mix em andamento (/stop, desligar, destroy). */
+  private autoplayGeneration = 0;
+  private autoplayPending: { readonly seed: Track; readonly generation: number } | null = null;
+  /** Semente cujo mix não rendeu faixa; evita buscar de novo no fim da fila. */
+  private autoplayFailedSeedId: string | null = null;
 
   private constructor(
     private readonly guild: Guild,
@@ -132,6 +146,8 @@ export class GuildPlayer {
     this.log = logger.child({ guildId: guild.id });
     this.volumePercent = deps.config.defaultVolume;
     this.history = new History(deps.config.historySize);
+    this.autoplayEnabled = deps.config.autoplayDefault;
+    this.autoplayRecent = new RecentTracks(deps.config.autoplayRecentLimit);
     this.audioPlayer = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
     this.connection.subscribe(this.audioPlayer);
 
@@ -214,6 +230,33 @@ export class GuildPlayer {
 
   get loopMode(): LoopMode {
     return this.queue.loopMode;
+  }
+
+  get autoplay(): boolean {
+    return this.autoplayEnabled;
+  }
+
+  /**
+   * Liga/desliga o autoplay. Ligar já busca a próxima se a fila estiver no fim; desligar cancela a
+   * busca e tira da fila as faixas que o autoplay tinha colocado. Retorna quantas saíram.
+   */
+  setAutoplay(enabled: boolean): number {
+    this.autoplayEnabled = enabled;
+    if (!enabled) {
+      this.cancelAutoplay();
+      const removed = this.queue.removeWhere((track) => track.autoplayFrom !== undefined);
+      if (!this.queue.current) this.armIdleTimer();
+      return removed;
+    }
+    this.autoplayFailedSeedId = null;
+    if (this.queue.current) {
+      this.maybePrefetchAutoplay();
+    } else {
+      // Fila já acabou: começa pelo mix da última faixa tocada.
+      const seed = this.history.entries[0];
+      if (seed) this.fetchAutoplay(seed);
+    }
+    return 0;
   }
 
   get isPaused(): boolean {
@@ -346,7 +389,11 @@ export class GuildPlayer {
   stop(): void {
     this.queue.clearUpcoming();
     this.queue.loopMode = 'off';
-    if (this.queue.current) this.stopCurrent({ skip: true, drop: true });
+    this.cancelAutoplay();
+    if (this.queue.current) {
+      this.stopRequested = true;
+      this.stopCurrent({ skip: true, drop: true });
+    }
   }
 
   pause(): boolean {
@@ -394,6 +441,7 @@ export class GuildPlayer {
     if (this.readyWatchdog) clearTimeout(this.readyWatchdog);
     this.readyWatchdog = null;
     this.finishTrack();
+    this.cancelAutoplay();
     this.queue.reset();
     this.active?.kill();
     this.active = null;
@@ -420,9 +468,12 @@ export class GuildPlayer {
   private playNext(advance: AdvanceOptions, announce = true): void {
     if (this.destroyed) return;
     this.finishTrack();
+    const previous = this.queue.current;
+    const stopped = this.stopRequested;
+    this.stopRequested = false;
     const track = this.queue.advance(advance);
     if (!track) {
-      this.armIdleTimer();
+      this.onQueueEnd(previous ?? this.history.entries[0] ?? null, stopped);
       return;
     }
     this.clearTimer('idle');
@@ -433,6 +484,93 @@ export class GuildPlayer {
     this.quietNextStart = false;
     this.startedTrack = track;
     this.emit('trackStarted', (events) => events.trackStarted?.(this, track, announce && !quiet));
+    this.maybePrefetchAutoplay();
+  }
+
+  /** Fila acabou: autoplay (se ligado) ou timer de inatividade (ADR-037). */
+  private onQueueEnd(seed: Track | null, stopped: boolean): void {
+    const action = queueEndAction({
+      enabled: this.autoplayEnabled,
+      stopped,
+      seedId: seed?.id ?? null,
+      pendingSeedId: this.autoplayPending?.seed.id ?? null,
+      failedSeedId: this.autoplayFailedSeedId,
+    });
+    if (action === 'fetch' && seed) {
+      this.fetchAutoplay(seed);
+      return;
+    }
+    if (action === 'wait') return;
+    if (action === 'exhausted' && seed) void this.notify(autoplayExhaustedMessage(seed));
+    this.armIdleTimer();
+  }
+
+  /** Começou a tocar a última faixa da fila: já busca a próxima, para não haver silêncio entre as duas. */
+  private maybePrefetchAutoplay(): void {
+    const current = this.queue.current;
+    if (!this.autoplayEnabled || !current || this.queue.size > 0 || this.queue.loopMode !== 'off') return;
+    if (this.autoplayPending?.seed === current) return;
+    this.fetchAutoplay(current);
+  }
+
+  private fetchAutoplay(seed: Track): void {
+    const generation = ++this.autoplayGeneration;
+    this.autoplayPending = { seed, generation };
+    // Fila parada esperando o mix: o timer de inatividade não pode correr.
+    if (!this.queue.current) this.clearTimer('idle');
+    this.log.info({ seedId: seed.id }, 'autoplay: fetching mix');
+    this.deps.youtube
+      .mix(seed.id)
+      .catch((error: unknown) => {
+        this.log.warn({ err: error, seedId: seed.id }, 'autoplay: mix failed');
+        return null;
+      })
+      .then((candidates) => this.onAutoplayResult(seed, generation, candidates))
+      .catch((error: unknown) => this.log.error({ err: error }, 'autoplay: unexpected error'));
+  }
+
+  private onAutoplayResult(seed: Track, generation: number, candidates: readonly TrackInfo[] | null): void {
+    if (this.destroyed || generation !== this.autoplayGeneration) return;
+    this.autoplayPending = null;
+    if (!this.autoplayEnabled) return;
+
+    const current = this.queue.current;
+    const waiting = current === null;
+    // A fila mudou durante a busca (faixa nova ou /play): a próxima "última faixa" busca de novo.
+    if (!waiting && (current !== seed || this.queue.size > 0)) return;
+
+    const avoid = buildAvoid([
+      ...this.history.entries,
+      ...this.autoplayRecent.entries,
+      ...this.queue.upcoming,
+      ...(current ? [current] : []),
+      seed,
+    ]);
+    const pick = candidates ? pickAutoplayCandidate(candidates, avoid, this.deps.config.maxTrackDurationSec) : null;
+    if (!pick) {
+      this.autoplayFailedSeedId = seed.id;
+      this.log.info({ seedId: seed.id, candidates: candidates?.length ?? null }, 'autoplay: no candidate');
+      if (waiting) {
+        void this.notify(autoplayExhaustedMessage(seed));
+        this.armIdleTimer();
+      }
+      return;
+    }
+
+    const track: Track = {
+      ...pick,
+      requestedBy: { id: this.guild.members.me?.id ?? '0', name: AUTOPLAY_REQUESTER },
+      autoplayFrom: seed.title,
+    };
+    this.autoplayRecent.push(track);
+    this.queue.add([track]);
+    this.log.info({ seedId: seed.id, trackId: track.id, title: track.title }, 'autoplay: track queued');
+    if (waiting) this.playNext({ skip: false, drop: false });
+  }
+
+  private cancelAutoplay(): void {
+    this.autoplayGeneration++;
+    this.autoplayPending = null;
   }
 
   private finishTrack(): void {
