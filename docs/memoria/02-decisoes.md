@@ -164,7 +164,8 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Contexto:** aprovado pelo usuário ao revisar a ADR-019.
 - **Implementação (2026-10-17):** `ControlPanels` (até 5 mensagens por faixa) e `router.ts`. O aviso automático virou embed com botões (antes texto). O `/nowplaying` é visível a todos, mas os botões exigem o mesmo canal. Clique em painel inativo (faixa acabou, restart) desliga os botões daquela mensagem e explica em efêmero. O `/queue` continua com collector (botões efêmeros de 2 min; migrar não trazia ganho).
 
-## ADR-031 — SQLite como espelho da fila em memória (Fase 6; substitui "fila só em memória")
+## ADR-031 — SQLite como espelho da fila em memória (Fase 6) — ADIADA
+- **Status (2026-10-17):** Fase 6 cancelada pelo usuário ("manteremos o estado atual do projeto por enquanto"). **Nada foi implementado:** fila, configurações e histórico continuam só em memória e se perdem no restart. O plano proposto está em 05 para quando for retomado.
 - **Data:** 2026-10-17
 - **Decisão:** fila e estado continuam em memória durante a execução; o SQLite guarda um espelho para sobreviver a restart e à destruição do player (P-015). Ao restaurar, o primeiro /play avisa "fila anterior com N faixas restaurada — use /clear para descartar". No start não reconecta ao canal.
 - **Contexto:** substitui a decisão original de fila apenas em memória (`01-arquitetura.md`); aprovado pelo usuário.
@@ -235,4 +236,4 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 
 ## ADR-041 — /filtro por guild
 - **Data:** 2026-10-17
-- **Decisão:** `nenhum | bassboost | nightcore | 8d`, guardado em `GuildSettings` (sobrevive ao /leave; persistido na Fase 6). Aplicar reabre o stream na posição atual (ADR-035). Efeitos: `bass=g=8:f=110:w=0.6,alimiter=limit=0.95`; `aresample=48000,asetrate=48000*1.25,aresample=48000` (o primeiro aresample corrige m4a a 44,1 kHz); `apulsator=hz=0.125`. Nightcore entra na conversão tempo tocado → posição (velocidade 1,25).
+- **Decisão:** `nenhum | bassboost | nightcore | 8d`, guardado em `GuildSettings` (sobrevive ao /leave, mas não ao restart: Fase 6 adiada). Aplicar reabre o stream na posição atual (ADR-035). Efeitos: `bass=g=8:f=110:w=0.6,alimiter=limit=0.95`; `aresample=48000,asetrate=48000*1.25,aresample=48000` (o primeiro aresample corrige m4a a 44,1 kHz); `apulsator=hz=0.125`. Nightcore entra na conversão tempo tocado → posição (velocidade 1,25).

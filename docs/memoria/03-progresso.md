@@ -105,3 +105,7 @@ Diário cronológico, mais recente por último.
 - Testes: 251 (+23). Um ajuste de fronteira em `mediaPosition` (exatamente no início de um corte = fim do corte).
 - Integração no container (código compilado): API real (~200 ms, cortes em 3 de 4 clipes); stream com seek + corte + nightcore + loudnorm com duração esperada; pré-carga parada 60 s tocou inteira; nenhum processo restante. Deploy 22 comandos; `healthy`; `top` só node.
 - Pendente: teste no Discord (transição com pré-carga, filtros de ouvido).
+
+## 2026-10-17 — Fase 6 cancelada; encerramento da leva
+- Plano da Fase 6 (SQLite) apresentado; usuário cancelou: "manteremos o estado atual do projeto por enquanto". ADR-031 marcada como adiada; plano guardado em 05.
+- Estado final da leva: Fases 1–5 concluídas, 22 comandos, 251 testes, bot rodando `healthy`.

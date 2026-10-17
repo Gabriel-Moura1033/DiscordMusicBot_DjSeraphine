@@ -32,7 +32,7 @@
 - **StreamPlan** — `src/audio/filters.ts`: `{ startSec, segments, filter, loudnorm }` com que um stream foi aberto. `buildAudioFilter(plan)` gera o `-af`; `mediaPosition(tocado, plan)` dá a posição no vídeo (seek + cortes + velocidade); `activePlan` no `GuildPlayer` substitui o antigo `startOffsetSec`.
 - **Segment** — trecho `[start, end)` no tempo do vídeo removido pelo SponsorBlock (`music_offtopic`).
 - **Pré-carga (preload)** — próxima faixa (`Queue.peekNext()`) aberta `PRELOAD_SECONDS` antes do fim e parada por backpressure; `tickPreload` (5 s) descarta se a próxima ou o plano mudou; `takePreload` usa se bater.
-- **GuildSettings** — preferências por guild (`filter`) guardadas no `PlayerManager`, sobrevivem ao player; persistidas na Fase 6.
+- **GuildSettings** — preferências por guild (`filter`) guardadas no `PlayerManager`, sobrevivem ao player, mas não ao restart (só em memória).
 - **FilterName** — `nenhum` | `bassboost` | `nightcore` | `8d`.
 - **GuildRequester** — o que os guards (`checkJoin`, `checkPlayer`) leem de uma interação; vale para comandos e componentes.
 
