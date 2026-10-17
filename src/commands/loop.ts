@@ -1,7 +1,7 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
 import type { LoopMode } from '../player/Queue.js';
-import { LOOP_LABELS } from './embeds.js';
-import { say } from './reply.js';
+import * as control from '../control/playback.js';
+import { discordActor, respond } from './reply.js';
 import type { Command } from './types.js';
 
 function isLoopMode(value: string): value is LoopMode {
@@ -30,8 +30,7 @@ const command: Command = {
     const mode = interaction.options.getString('modo', true);
     // O Discord só envia valores das choices, mas a checagem mantém o tipo honesto.
     if (!isLoopMode(mode)) throw new Error(`invalid loop mode: ${mode}`);
-    player.setLoop(mode);
-    await say(interaction, `Loop: **${LOOP_LABELS[mode]}**.`);
+    await respond(interaction, control.setLoop(player, discordActor(interaction), mode));
   },
 };
 

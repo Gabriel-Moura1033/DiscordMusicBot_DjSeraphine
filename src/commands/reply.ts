@@ -1,4 +1,5 @@
 import { MessageFlags, type RepliableInteraction } from 'discord.js';
+import type { Actor, ControlResult } from '../control/types.js';
 import { logger } from '../logger.js';
 
 /** Resposta pública, sem preview de links e sem mencionar ninguém. */
@@ -30,6 +31,23 @@ export async function replyUnexpectedError(interaction: RepliableInteraction): P
     // A interação pode ter expirado (15 min) ou o canal sumido.
     logger.debug({ err: error }, 'could not report error to user');
   }
+}
+
+/** Resposta de uma operação de controle: sucesso público; recusa efêmera (ou edita, se já adiada). */
+export async function respond(interaction: RepliableInteraction, result: ControlResult): Promise<void> {
+  if (result.ok) {
+    await say(interaction, result.message);
+    return;
+  }
+  if (interaction.deferred) {
+    await interaction.editReply(result.message);
+    return;
+  }
+  await deny(interaction, result.message);
+}
+
+export function discordActor(interaction: RepliableInteraction<'cached'>): Actor {
+  return { source: 'discord', userId: interaction.user.id, name: interaction.member.displayName };
 }
 
 export function capitalize(text: string): string {

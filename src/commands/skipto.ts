@@ -1,6 +1,6 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
-import { trackLink } from '../util/format.js';
-import { deny, say } from './reply.js';
+import * as control from '../control/playback.js';
+import { discordActor, respond } from './reply.js';
 import type { Command } from './types.js';
 
 const command: Command = {
@@ -14,20 +14,7 @@ const command: Command = {
     ),
 
   async execute({ interaction, player }) {
-    const position = interaction.options.getInteger('posicao', true);
-    const result = player.skipTo(position);
-    if (result === 'busy') {
-      await deny(interaction, 'Estou trocando de faixa agora; tente de novo em instantes.');
-      return;
-    }
-    if (!result) {
-      const reason = player.queue.current ? `A fila tem ${player.queue.size} faixa(s).` : 'Não há nada tocando.';
-      await deny(interaction, `Posição inválida. ${reason}`);
-      return;
-    }
-    const where = player.loopMode === 'queue' ? 'foram para o fim da fila' : 'saíram da fila';
-    const note = result.skipped > 0 ? ` (${result.skipped} faixa(s) puladas ${where})` : '';
-    await say(interaction, `⏩ Pulando para ${trackLink(result.track)}${note}.`);
+    await respond(interaction, control.skipTo(player, discordActor(interaction), interaction.options.getInteger('posicao', true)));
   },
 };
 

@@ -7,6 +7,8 @@
 - [x] Fase 4 — Autoplay — falta teste no Discord
 - [x] Fase 5 — Qualidade de áudio (loudnorm, pré-carga, SponsorBlock, /filtro) — falta teste no Discord
 - [x] Fase 6 — Persistência SQLite (adiada e retomada em 2026-10-17) — falta teste no Discord
+- [x] Fase 7a — Camada de controle compartilhada (sem mudança de comportamento)
+- [ ] Fase 7b — Painel web local
 
 ## Prioridade alta
 - [ ] Testar ponta a ponta num servidor real (play/skip/stop/leave, playlist, vídeo privado, idade, timer de inatividade, /queue paginado)

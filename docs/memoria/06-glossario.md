@@ -37,6 +37,9 @@
 - **Espelho** — `PlayerManager.persistAll()` a cada 5 s (só grava se o JSON mudou), no `onDestroyed` e no shutdown.
 - **pendingRestore** — fila salva entregue ao `GuildPlayer` ao conectar; o primeiro `enqueue` toca o pedido e coloca a fila salva depois (`consumeRestoredCount` → aviso).
 - **FilterName** — `nenhum` | `bassboost` | `nightcore` | `8d`.
+- **Camada de controle** — `src/control/`: `playback.ts` (uma função por ação: recebe `ControllablePlayer` + `Actor`, devolve `ControlResult { ok, message }` e audita), `enqueue.ts` (`requestPlay` → `PlayOutcome`). Comandos usam `respond(interaction, result)`: ok = público, recusa = efêmera (ou edição se já adiada). Operações lentas recebem `beforeSlow` (o comando faz `deferReply` ali).
+- **Actor** — origem da ação: `{ source: 'discord', userId, name }` ou `{ source: 'painel' }`; vai para o log `control action` (`audit: true`).
+- **Testes de referência** — `test/commands-golden.test.ts` e `test/playflow-golden.test.ts`: escritos e aprovados antes da refatoração da 7a, não podem mudar sem mudança de comportamento intencional. `test/control-equivalence.test.ts`: comando ≡ chamada direta.
 - **GuildRequester** — o que os guards (`checkJoin`, `checkPlayer`) leem de uma interação; vale para comandos e componentes.
 
 ## Convenções de código

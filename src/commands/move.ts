@@ -1,6 +1,6 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
-import { trackLink } from '../util/format.js';
-import { deny, say } from './reply.js';
+import * as control from '../control/playback.js';
+import { discordActor, respond } from './reply.js';
 import type { Command } from './types.js';
 
 const command: Command = {
@@ -19,12 +19,7 @@ const command: Command = {
   async execute({ interaction, player }) {
     const from = interaction.options.getInteger('de', true);
     const to = interaction.options.getInteger('para', true);
-    const moved = player.queue.move(from, to);
-    if (!moved) {
-      await deny(interaction, `Posição inválida. A fila tem ${player.queue.size} faixa(s).`);
-      return;
-    }
-    await say(interaction, `↕️ Movi ${trackLink(moved)} de #${from} para #${to}.`);
+    await respond(interaction, control.move(player, discordActor(interaction), from, to));
   },
 };
 

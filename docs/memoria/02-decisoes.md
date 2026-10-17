@@ -250,3 +250,10 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **/top (confirmado pelo usuário):** conta reprodução com ≥ 30 s ouvidos ou fim natural; **faixas do autoplay não contam** no escopo servidor (no escopo "eu" já não contariam). Escopo "eu" = pedidos da pessoa nesta guild.
 - **Playlists:** por usuário (valem em qualquer guild), nome sem diferenciar maiúsculas (`COLLATE NOCASE`), `salvar` substitui, `PLAYLISTS_PER_USER` (25) para criar; carregar não re-resolve no YouTube (falha de vídeo indisponível cai no aviso normal ao tocar).
 - **Validado:** dados sobrevivem a `compose down` + `up`; volume com dono `node`; shutdown "bye" sem erro com o banco aberto.
+
+## ADR-043 — Camada de controle compartilhada (Fase 7a)
+- **Data:** 2026-10-17
+- **Decisão:** toda ação de reprodução/fila vive em `src/control/` (validação, efeito, mensagem ao usuário, auditoria com origem). Slash commands, botões e o painel (7b) chamam as mesmas funções; os comandos só leem opções e respondem. O fluxo do /play virou `requestPlay` (resolve, conecta, enfileira) + apresentação no `playFlow`.
+- **Sem mudança de comportamento:** garantida por testes de referência escritos e aprovados no código antigo antes de refatorar (18 comandos + 7 cenários do /play), mantidos sem edição, e por 30 casos de equivalência comando × chamada direta.
+- **Detalhe:** respostas adiadas (`/seek`, `/replay`, `/filtro`) recebem o hook `beforeSlow`, para o `deferReply` acontecer só depois da validação, como antes.
+- **Contexto:** pedido do usuário para a Fase 7 ("nada de lógica duplicada só para o painel"), dividida em 7a (refatoração) e 7b (painel).

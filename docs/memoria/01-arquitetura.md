@@ -5,7 +5,8 @@
 |---|---|---|
 | Entrada | `src/index.ts` | Cria o `Client` e os serviços, liga `PlayerEvents` (painéis + presença), repassa `voiceStateUpdate` ao `PlayerManager` |
 | Interações | `src/interactions/` | `router.ts` (handler global de `interactionCreate`), botões de controle, menu do /search, autocomplete, formato de `customId` |
-| Comandos | `src/commands/` | Um arquivo por slash command (`Command`: `data`, `guard`, `execute`). Só valida entrada e formata resposta |
+| Comandos | `src/commands/` | Um arquivo por slash command (`Command`: `data`, `guard`, `execute`). Lê as opções, chama `src/control/` e responde (`respond`) |
+| Controle | `src/control/` | Operações compartilhadas por comandos, botões e painel: `playback.ts` (pause, skip, seek, fila…, com mensagens e auditoria), `enqueue.ts` (`requestPlay`) |
 | Player | `src/player/` | `PlayerManager` (Map guildId → `GuildPlayer`), `GuildPlayer` (conexão, AudioPlayer, timers), `Queue` (estrutura pura) |
 | YouTube | `src/youtube/` | `url.ts` (classificar/normalizar entrada), `YouTubeService` (metadados + stream), `errors.ts` (stderr → erro tipado), `process.ts` (spawn/kill) |
 | Infra | `src/config.ts`, `src/logger.ts`, `src/health.ts`, `src/presence.ts` | Config validada; logger pino; heartbeat; presença |

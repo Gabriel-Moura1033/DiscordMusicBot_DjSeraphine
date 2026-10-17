@@ -1,5 +1,6 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
-import { deny, say } from './reply.js';
+import * as control from '../control/playback.js';
+import { discordActor, respond } from './reply.js';
 import type { Command } from './types.js';
 
 const command: Command = {
@@ -10,12 +11,7 @@ const command: Command = {
     .setContexts(InteractionContextType.Guild),
 
   async execute({ interaction, player }) {
-    if (player.queue.size < 2) {
-      await deny(interaction, 'Precisa de pelo menos 2 faixas na fila para embaralhar.');
-      return;
-    }
-    player.queue.shuffle();
-    await say(interaction, `🔀 Embaralhei ${player.queue.size} faixas.`);
+    await respond(interaction, control.shuffle(player, discordActor(interaction)));
   },
 };
 

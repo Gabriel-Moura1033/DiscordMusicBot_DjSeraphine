@@ -116,3 +116,8 @@ Diário cronológico, mais recente por último.
 - Testes: 280 (+29) com SQLite em memória: migrações (do zero, reaplicar, só as novas, rollback, downgrade), settings (inclusive valores obsoletos), fila (ida e volta), /top (períodos, escopos, autoplay e outras guilds fora), playlists (CRUD, maiúsculas, por usuário, limite, autocomplete), nomes e períodos. Um teste revelou que o histórico recriado perdia a marca de autoplay; corrigido.
 - Validado no container: banco no volume (WAL, dono `node`), dados sobrevivem a `down`/`up`, shutdown limpo; deploy 24 comandos; `healthy`.
 - Pendente: teste no Discord (restauração depois de restart, /top, /playlist).
+
+## 2026-10-17 — Fase 7a: camada de controle
+- Usuário confirmou a Fase 7 (painel web) com ajustes: dividir em 7a/7b, CSS/JS como arquivos separados com CSP `'self'`, Origin aceitando localhost e 127.0.0.1, teste de acesso pela LAN no README. `PANEL_HOST=0.0.0.0` no container com porta só em 127.0.0.1 e `node:http` puro confirmados.
+- 7a: `src/control/` (`types.ts`, `playback.ts`, `enqueue.ts`), `respond`/`discordActor` em `reply.ts`, comandos de controle e botões reescritos sobre a camada, `playFlow` só apresentação, `seekReply.ts` removido (função foi para `control/playback.ts`). Auditoria `control action` com origem.
+- Processo: testes de referência (comandos + /play) escritos e passando no código antigo; refatoração; mesmos testes sem edição + 30 de equivalência. 335 testes. Imagem gerada e bot reiniciado `healthy`; comandos sem mudança de registro.
