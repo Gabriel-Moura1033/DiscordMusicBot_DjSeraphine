@@ -15,3 +15,8 @@ Diário cronológico, mais recente por último.
 ## 2026-10-17 — Camada YouTube
 - `src/youtube/url.ts`, `errors.ts`, `process.ts`, `YouTubeService.ts`; `src/util/json.ts`, `format.ts`.
 - Smoke test no host (yt-dlp 2026.08.19): busca ~1,3 s, playlist flat ~1,1 s, vídeo completo ~2 s; erro de vídeo inexistente e `--match-filter` mapeados; kill não deixa processos.
+
+## 2026-10-17 — Player
+- `src/player/Queue.ts` (fila pura; `advance({skip, drop})` cobre loop off/track/queue, skip e falhas).
+- `src/player/GuildPlayer.ts` (conexão, AudioPlayer, timers idle/alone, aviso de falha, reconexão em 5 s).
+- `src/player/PlayerManager.ts` (Map por guild + Map de conexões pendentes para /play concorrente).
