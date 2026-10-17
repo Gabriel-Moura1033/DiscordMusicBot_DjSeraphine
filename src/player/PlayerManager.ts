@@ -59,6 +59,11 @@ export class PlayerManager {
     return player;
   }
 
+  /** Player da guild sem a checagem de conexão morta (para leitura de estado, sem efeitos colaterais). */
+  peek(guildId: string): GuildPlayer | undefined {
+    return this.players.get(guildId);
+  }
+
   async getOrCreate(
     guild: Guild,
     voiceChannel: VoiceBasedChannel,

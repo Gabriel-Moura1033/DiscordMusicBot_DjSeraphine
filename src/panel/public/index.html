@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>DJ Seraphine — painel</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main id="login-view" class="login" hidden>
+    <form id="login-form" class="card login-card" autocomplete="off">
+      <h1>🎧 DJ Seraphine</h1>
+      <p class="muted">Painel local. Entre com o <code>PANEL_TOKEN</code>.</p>
+      <label for="login-token">Token</label>
+      <input id="login-token" type="password" required autocomplete="current-password">
+      <button type="submit" class="primary">Entrar</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+  </main>
+
+  <div id="app-view" hidden>
+    <header class="topbar">
+      <div class="brand">🎧 DJ Seraphine</div>
+      <div id="bot-status" class="status-line"></div>
+      <nav id="guild-tabs" class="tabs" aria-label="Servidores"></nav>
+      <button id="logout" class="ghost">Sair</button>
+    </header>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+
+    <div class="layout">
+      <section class="card" aria-labelledby="player-title">
+        <div class="card-head">
+          <h2 id="player-title">Tocando</h2>
+          <span id="player-badge" class="badge"></span>
+        </div>
+
+        <div id="join-box" class="join" hidden>
+          <p class="muted">O bot não está em nenhum canal de voz neste servidor.</p>
+          <div class="row">
+            <label>Voz <select id="join-voice"></select></label>
+            <label>Avisos <select id="join-text"></select></label>
+            <button id="join-button" class="primary">Entrar</button>
+          </div>
+        </div>
+
+        <div id="session-info" class="muted small"></div>
+
+        <div id="now" class="now">
+          <img id="now-thumb" class="thumb" alt="">
+          <div class="now-text">
+            <a id="now-title" class="now-title" target="_blank" rel="noopener noreferrer"></a>
+            <div id="now-meta" class="muted small"></div>
+          </div>
+        </div>
+
+        <div id="progress" class="progress" title="Clique para ir até esse ponto">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div class="times small muted"><span id="time-now">0:00</span><span id="time-total">0:00</span></div>
+
+        <div class="controls">
+          <button data-action="previous" title="Anterior">⏮️</button>
+          <button id="toggle-pause" title="Pausar/retomar">⏯️</button>
+          <button data-action="skip" title="Pular">⏭️</button>
+          <button data-action="replay" title="Recomeçar">🔄</button>
+          <button data-action="stop" class="danger" title="Parar e limpar a fila">⏹️</button>
+          <button data-action="leave" class="danger" title="Sair do canal">👋</button>
+        </div>
+
+        <div class="settings">
+          <label>Volume <input id="volume" type="range" min="0" max="100" step="1"> <span id="volume-label">0%</span></label>
+          <label>Loop
+            <select id="loop">
+              <option value="off">desligado</option>
+              <option value="track">faixa</option>
+              <option value="queue">fila</option>
+            </select>
+          </label>
+          <label>Filtro
+            <select id="filter">
+              <option value="nenhum">nenhum</option>
+              <option value="bassboost">bass boost</option>
+              <option value="nightcore">nightcore</option>
+              <option value="8d">8D</option>
+            </select>
+          </label>
+          <label class="check"><input id="autoplay" type="checkbox"> Autoplay</label>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="queue-title">
+        <div class="card-head">
+          <h2 id="queue-title">Fila</h2>
+          <span id="queue-summary" class="muted small"></span>
+        </div>
+        <form id="add-form" class="row">
+          <input id="add-query" placeholder="Link do YouTube ou nome da música" maxlength="500" required>
+          <select id="add-mode"><option value="append">no fim</option><option value="now">tocar agora</option></select>
+          <button type="submit" class="primary">Adicionar</button>
+        </form>
+        <ol id="queue" class="queue"></ol>
+        <div class="row end">
+          <button data-action="shuffle">🔀 Embaralhar</button>
+          <button data-action="clear" class="danger">🧹 Limpar fila</button>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="message-title">
+        <div class="card-head"><h2 id="message-title">Mensagem como o bot</h2></div>
+        <form id="message-form" class="stack">
+          <label>Canal <select id="message-channel" required></select></label>
+          <label>Texto
+            <textarea id="message-content" rows="4" maxlength="2000"></textarea>
+          </label>
+          <div class="small muted"><span id="message-count">0</span>/2000</div>
+          <label class="check"><input id="embed-toggle" type="checkbox"> Enviar embed</label>
+          <div id="embed-fields" class="stack" hidden>
+            <input id="embed-title" placeholder="Título" maxlength="256">
+            <textarea id="embed-description" rows="3" placeholder="Descrição" maxlength="4096"></textarea>
+            <label>Cor <input id="embed-color" type="color" value="#ff0033"></label>
+          </div>
+          <input id="message-reply" placeholder="Responder à mensagem (ID, opcional)" inputmode="numeric">
+          <label class="check"><input id="message-mentions" type="checkbox"> Permitir menções de usuário/cargo (@everyone/@here nunca)</label>
+          <button type="submit" class="primary">Enviar</button>
+          <p id="message-result" class="small" role="status"></p>
+        </form>
+      </section>
+
+      <section class="card wide" aria-labelledby="logs-title">
+        <div class="card-head">
+          <h2 id="logs-title">Logs ao vivo</h2>
+          <div class="row">
+            <select id="log-level">
+              <option value="20">debug+</option>
+              <option value="30" selected>info+</option>
+              <option value="40">warn+</option>
+              <option value="50">error+</option>
+            </select>
+            <select id="log-guild"><option value="">todos os servidores</option></select>
+            <input id="log-text" placeholder="Filtrar texto">
+            <label class="check"><input id="log-pause" type="checkbox"> Pausar rolagem</label>
+          </div>
+        </div>
+        <div id="logs" class="logs" role="log" aria-live="off"></div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>

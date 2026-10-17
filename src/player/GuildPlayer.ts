@@ -160,6 +160,8 @@ export class GuildPlayer {
   /** Próxima faixa já aberta e parada esperando (no máximo uma). */
   private preload: { readonly track: Track; readonly plan: StreamPlan; readonly stream: ActiveStream } | null = null;
   private preloadTicker: NodeJS.Timeout | null = null;
+  /** Muda a cada stream aberto (faixa nova, retry, seek, filtro): o painel usa para notar saltos de posição. */
+  private streamCounter = 0;
   private seekGeneration = 0;
   /** /previous: a faixa interrompida volta para a fila, não para o histórico. */
   private skipHistoryOnce = false;
@@ -335,6 +337,10 @@ export class GuildPlayer {
     return this.deps.settings.filter;
   }
 
+  get streamGeneration(): number {
+    return this.streamCounter;
+  }
+
   /** Troca o filtro da guild; se algo está tocando, reabre o stream na posição atual (como o /seek). */
   async setFilter(filter: FilterName): Promise<SeekResult> {
     this.deps.settings.filter = filter;
@@ -472,6 +478,7 @@ export class GuildPlayer {
     this.active = stream;
     this.activePlan = plan;
     this.retries = 0;
+    this.streamCounter++;
     this.audioPlayer.play(stream.resource);
     before.kill();
     this.log.info({ trackId: track.id, positionSec: plan.startSec, filter: plan.filter, cuts: plan.segments.length }, 'track seeked');
@@ -716,6 +723,7 @@ export class GuildPlayer {
     stream.resource.volume?.setVolumeLogarithmic(this.volumePercent / 100);
     this.active = stream;
     this.activePlan = plan;
+    this.streamCounter++;
     this.audioPlayer.play(stream.resource);
     this.log.info(
       { trackId: track.id, title: track.title, attempt: this.retries + 1, preloaded: preloaded !== null, filter: plan.filter, cuts: plan.segments.length },

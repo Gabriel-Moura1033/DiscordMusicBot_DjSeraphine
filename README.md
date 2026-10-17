@@ -100,6 +100,30 @@ npm run typecheck   # tsc sobre src/ e test/
 
 Os testes são **puros**: um setup global faz `spawn`/`exec` e `fetch` lançarem erro, então nada depende de rede, yt-dlp, ffmpeg ou YouTube.
 
+## Painel web local
+
+Página para acompanhar e controlar o bot: logs ao vivo, estado de cada servidor (faixa, fila, volume, loop, filtro, autoplay), controles de reprodução e da fila (arrastar e soltar, pular até, remover), entrar num canal de voz escolhido e enviar mensagens como o bot.
+
+1. No `.env`: `PANEL_ENABLED=true` e `PANEL_TOKEN=` com pelo menos 32 caracteres (`openssl rand -hex 32`).
+2. `docker compose up -d` e abra **http://localhost:8787** (ou `http://127.0.0.1:8787`). Entre com o token.
+
+Como funciona e o que esperar:
+- O painel usa a mesma camada dos slash commands: o que muda por um aparece no outro em tempo real. Itens da fila são identificados por ID, então mexer pelo Discord ao mesmo tempo não remove a faixa errada ("essa faixa não está mais na fila" + lista atualizada).
+- Não exige estar no canal de voz, mas toda ação gera log de auditoria com origem `painel`; com `PANEL_ANNOUNCE_ACTIONS=true` o bot avisa no canal de texto ("⏭️ Pulado via painel").
+- Mensagens: nenhuma menção notifica por padrão; a opção libera só usuários e cargos — @everyone/@here nunca.
+- Segurança: login por token (5 tentativas/min), cookie HttpOnly + SameSite=Strict, CSRF e checagem de Origin/Host em toda ação, rate limit (5 mensagens/min, 60 ações/min), CSP sem scripts externos.
+
+### Verificação recomendada: acesso pela rede
+
+O painel só pode responder nesta máquina. O compose publica a porta em `127.0.0.1`; dentro do container o servidor ouve em `0.0.0.0` porque é a única forma de o tráfego publicado chegar até ele. **Depois de atualizar Docker/Podman (ou mexer na rede), confirme:**
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8787/                       # 200
+curl -s -m 5 http://$(hostname -I | awk '{print $1}'):8787/ || echo "recusado — ok"    # deve ser recusado
+```
+
+Se o segundo comando responder, **pare o bot** (`docker compose down`) e confira a linha `ports:` do `docker-compose.yml` (tem que começar com `127.0.0.1:`).
+
 ## Operação
 
 - **Healthcheck:** o bot grava `HEARTBEAT_FILE` a cada 15 s enquanto o gateway do Discord está conectado; o container fica `unhealthy` se o arquivo ficar mais de 60 s sem atualizar (`docker compose ps`).
@@ -138,6 +162,10 @@ Veja [`.env.example`](.env.example). Obrigatórias: `DISCORD_TOKEN`, `DISCORD_CL
 | Barulho/distorção com bass boost | Ganho de grave alto em faixas já com muito grave | `/filtro tipo:nenhum` |
 | `[config]`/`database: ... failed` ou `MigrationError` ao subir | Banco de versão mais nova que o código (downgrade) ou volume sem permissão | Volte para a versão do código que criou o banco, ou restaure um backup; o volume precisa ser gravável pelo usuário `node` |
 | Fila antiga reaparece no `/play` | Fila salva antes de um restart/queda (comportamento esperado) | `/clear` descarta; `/leave` sai sem guardar |
+| Bot não sobe: `PANEL_TOKEN é obrigatório…` | `PANEL_ENABLED=true` sem token (ou com menos de 32 caracteres) | Gere com `openssl rand -hex 32` |
+| Painel: "Host não permitido" | Acesso por um nome/IP que não é `localhost`/`127.0.0.1` (proteção contra DNS rebinding) | Use `http://localhost:8787` |
+| Painel: "Token CSRF inválido" / "Faça login de novo" | Sessão expirou (12 h) ou o bot reiniciou (sessões ficam em memória) | Recarregue a página e entre de novo |
+| Painel: porta em uso ao subir | Outro programa na 8787 | Mude `PANEL_PORT` no `.env` e recrie o container |
 | `/seek` demora | O áudio até o ponto pedido é baixado e descartado (ADR-035); em vídeos longos chega a ~7 s | Normal; a faixa continua tocando enquanto isso |
 | Busca retorna o vídeo errado | `ytsearch1` pega só o 1º resultado | Use `/search` para escolher, o autocomplete do `/play`, ou o link direto |
 | Autocomplete não sugere nada | Texto com menos de 3 letras, link, busca lenta (> ~2 s) ou `AUTOCOMPLETE_ENABLED=false` | Digite mais um pouco (a busca segue em segundo plano e a próxima tecla usa o cache) ou envie o texto: o `/play` busca do mesmo jeito |

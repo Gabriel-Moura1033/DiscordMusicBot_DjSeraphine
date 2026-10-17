@@ -40,6 +40,11 @@
 - **Camada de controle** — `src/control/`: `playback.ts` (uma função por ação: recebe `ControllablePlayer` + `Actor`, devolve `ControlResult { ok, message }` e audita), `enqueue.ts` (`requestPlay` → `PlayOutcome`). Comandos usam `respond(interaction, result)`: ok = público, recusa = efêmera (ou edição se já adiada). Operações lentas recebem `beforeSlow` (o comando faz `deferReply` ali).
 - **Actor** — origem da ação: `{ source: 'discord', userId, name }` ou `{ source: 'painel' }`; vai para o log `control action` (`audit: true`).
 - **Testes de referência** — `test/commands-golden.test.ts` e `test/playflow-golden.test.ts`: escritos e aprovados antes da refatoração da 7a, não podem mudar sem mudança de comportamento intencional. `test/control-equivalence.test.ts`: comando ≡ chamada direta.
+- **QueueEntry / qid** — item da fila `{ id, track }`; `id` (`q` + base36) é estável enquanto o item está na fila; a faixa que volta no loop de fila ganha ID novo. `Queue.positionOf(id)`, `Queue.entries`, `Queue.currentId`.
+- **PanelApp / PanelServer** — rotas puras (`handle(PanelRequest) → PanelResponse`) e o transporte node:http.
+- **PanelSnapshot** — foto do estado para o painel (`bot`, `guilds[]` com `status`, `current`, `queue`, `positionSec`, `speed`, `streamGeneration`).
+- **LogBuffer** — ring buffer dos logs (`PANEL_LOG_BUFFER`); `makeScrubber` troca o valor dos tokens por `[redacted]` em toda linha.
+- **PANEL_REQUESTER** — `{ id: 'panel', name: 'Painel' }`: "pedido por" das faixas adicionadas pelo painel.
 - **GuildRequester** — o que os guards (`checkJoin`, `checkPlayer`) leem de uma interação; vale para comandos e componentes.
 
 ## Convenções de código
@@ -72,6 +77,12 @@
 | `DEFAULT_FILTER` | não | `nenhum` | filtro inicial por guild |
 | `DB_PATH` | não | `data/dj.sqlite` | arquivo SQLite; definido vazio = em memória |
 | `PLAYLISTS_PER_USER` | não | 25 | playlists salvas por usuário (1–200) |
+| `PANEL_ENABLED` | não | `false` | liga o painel web local |
+| `PANEL_TOKEN` | se painel ligado | — | login do painel (≥ 32 caracteres) |
+| `PANEL_PORT` | não | 8787 | porta (publicada só em 127.0.0.1) |
+| `PANEL_HOST` | não | `127.0.0.1` | onde o servidor escuta (o compose força `0.0.0.0` dentro do container) |
+| `PANEL_LOG_BUFFER` | não | 1000 | linhas de log guardadas (100–20000) |
+| `PANEL_ANNOUNCE_ACTIONS` | não | `true` | avisa no canal as ações do painel |
 | `YTDLP_PATH` | não | `yt-dlp` | binário do yt-dlp |
 | `FFMPEG_PATH` | não | `ffmpeg` | binário do ffmpeg |
 | `YTDLP_AUTO_UPDATE` | não | `true` | `yt-dlp -U` no entrypoint do container |

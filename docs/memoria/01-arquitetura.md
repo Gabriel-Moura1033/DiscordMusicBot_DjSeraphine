@@ -11,6 +11,7 @@
 | YouTube | `src/youtube/` | `url.ts` (classificar/normalizar entrada), `YouTubeService` (metadados + stream), `errors.ts` (stderr → erro tipado), `process.ts` (spawn/kill) |
 | Infra | `src/config.ts`, `src/logger.ts`, `src/health.ts`, `src/presence.ts` | Config validada; logger pino; heartbeat; presença |
 | Registro | `src/deploy-commands.ts` | PUT dos comandos por guild via REST |
+| Painel | `src/panel/` | `server.ts` (node:http + montagem), `app.ts` (rotas puras), `security.ts`, `validation.ts`, `actions.ts` (→ `src/control/`), `state.ts` (hub SSE), `discord.ts` (canais, envio), `public/` (HTML/CSS/JS) |
 | Dados | `src/db/` | `openDatabase` (WAL, migrações por `user_version`), repositórios (`Store`) |
 
 ## Fluxo do /play
@@ -56,6 +57,13 @@
 - Espelho a cada 5 s (`persistAll`): copia loop/autoplay/volume do player para `GuildSettings`, grava settings e fila se mudaram; não sobrescreve enquanto a fila salva não foi entregue. `destroy` passa o snapshot (vazio no `/leave` com `discardQueue`; quedas/timeouts mantêm).
 - `PlayerEvents.trackPlayed` (≥ 30 s ouvidos ou fim natural) → `plays.record`. `/top` agrupa por vídeo sem as faixas do autoplay.
 - Shutdown: `persistAll` → `destroyAll` (grava cada fila) → `db.close()`.
+
+## Painel web (Fase 7b)
+- `index.ts` cria `PanelServer` se `config.panel`; `PlayerEvents` chamam `panel.notifyChange()`.
+- Requisição: `server.ts` lê o corpo (≤ 16 KB) → `PanelApp.handle()`: Host permitido → arquivos estáticos / login (Origin + rate limit + `safeEqual`) → sessão (cookie) → POST exige Origin + CSRF → rotas `/api/events` (SSE), `/api/guilds/:id/{channels,messages,actions}`.
+- Ações: `validateAction` → `runAction` → `src/control/` com `Actor { source: 'painel' }` (sem regra de canal de voz); itens da fila por ID (`queueItems.ts`); `join` em `control/session.ts`; aviso no canal se `PANEL_ANNOUNCE_ACTIONS`; `StateHub.poke()`.
+- Estado: `StateHub` monta `PanelSnapshot` a cada 1 s (ou poke) e publica se `changeKey` mudou (sem a posição) ou a cada 5 s; o navegador anda a barra sozinho com `positionSec`, `at` e `speed`.
+- Logs: `logger.ts` usa `pino.multistream` (stdout + `LogBuffer`), ambos passando pelo scrubber de segredos; SSE manda o buffer ao abrir e cada linha nova.
 
 ## Estado por guild (`GuildPlayer`)
 - `connection: VoiceConnection`, `audioPlayer: AudioPlayer`

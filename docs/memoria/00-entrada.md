@@ -3,7 +3,7 @@
 **O que é:** bot de música para Discord, uso privado (um servidor de amigos). Toca **apenas YouTube** via yt-dlp → ffmpeg → @discordjs/voice. Node 24 + TypeScript strict, discord.js v14, slash commands, fila em memória por guild, Docker.
 
 ## Estado atual (2026-10-17)
-- 24 comandos, 280 testes. Leva de 2026-10-17 concluída: Fases 1 (testes, healthcheck, shutdown), 2 (botões, /search, autocomplete, presença), 3 (/move, /skipto, /clear, /previous, /replay, /seek, histórico), 4 (/autoplay), 5 (loudnorm, pré-carga, SponsorBlock, /filtro) e 6 (SQLite: fila/configurações restauradas, /top, /playlist). Fase 7 (painel web) em andamento: 7a (camada de controle) feita.
+- 24 comandos, 417 testes. Leva de 2026-10-17 concluída: Fases 1 (testes, healthcheck, shutdown), 2 (botões, /search, autocomplete, presença), 3 (/move, /skipto, /clear, /previous, /replay, /seek, histórico), 4 (/autoplay), 5 (loudnorm, pré-carga, SponsorBlock, /filtro) e 6 (SQLite: fila/configurações restauradas, /top, /playlist). Fase 7 concluída: 7a (camada de controle compartilhada) e 7b (painel web local em http://localhost:8787, `PANEL_ENABLED`).
 - Fases 2–6 validadas no container e com testes, mas ainda **sem teste no Discord** (ver checklist em 05). Implementado: fila por guild, pipeline yt-dlp → ffmpeg com kill limpo, Docker.
 - Verificado: typecheck strict, resolução/streaming no host e no container (podman), sem processos ou /tmp vazando.
 - Testado em servidor real: voz e /play funcionam. 403 intermitente do YouTube tratado com retry (P-011). Demais comandos ainda sem teste completo (ver 05).
@@ -22,7 +22,7 @@
 **Ordem sugerida:** este arquivo → 03 (últimas entradas) → 01 → a sala relevante à tarefa.
 
 ## Mapa do código
-`src/index.ts` (bootstrap) · `src/commands/` (um arquivo por comando + `guards.ts` + `playFlow.ts`) · `src/control/` (operações compartilhadas: comandos, botões, painel) · `src/interactions/` (router, botões, /search, autocomplete) · `src/presence.ts` · `src/audio/` (filtros, SponsorBlock) · `src/db/` (SQLite) · `src/player/` (`PlayerManager` → `GuildPlayer` → `Queue`) · `src/youtube/` (`url.ts`, `YouTubeService.ts`, `process.ts`, `errors.ts`) · `src/deploy-commands.ts`.
+`src/index.ts` (bootstrap) · `src/commands/` (um arquivo por comando + `guards.ts` + `playFlow.ts`) · `src/control/` (operações compartilhadas: comandos, botões, painel) · `src/panel/` (painel web) · `src/interactions/` (router, botões, /search, autocomplete) · `src/presence.ts` · `src/audio/` (filtros, SponsorBlock) · `src/db/` (SQLite) · `src/player/` (`PlayerManager` → `GuildPlayer` → `Queue`) · `src/youtube/` (`url.ts`, `YouTubeService.ts`, `process.ts`, `errors.ts`) · `src/deploy-commands.ts`.
 
 ## Regras de manutenção
 - Ler esta sala e as relevantes antes de propor mudanças.

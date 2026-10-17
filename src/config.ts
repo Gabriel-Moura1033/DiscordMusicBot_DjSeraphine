@@ -24,6 +24,8 @@ export interface Config {
   /** Arquivo SQLite; `:memory:` = sem persistência (`DB_PATH` definido e vazio). */
   readonly dbPath: string;
   readonly playlistsPerUser: number;
+  /** `null` = painel desligado (`PANEL_ENABLED=false`). */
+  readonly panel: PanelConfig | null;
   readonly ytdlpPath: string;
   readonly ffmpegPath: string;
   readonly logLevel: string;
@@ -36,6 +38,17 @@ export interface Config {
   readonly presenceEnabled: boolean;
   readonly isProduction: boolean;
 }
+
+export interface PanelConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly token: string;
+  readonly logBuffer: number;
+  readonly announceActions: boolean;
+}
+
+/** Tamanho mínimo do PANEL_TOKEN: é a única barreira de acesso ao painel. */
+const PANEL_TOKEN_MIN_LENGTH = 32;
 
 class ConfigError extends Error {
   override readonly name = 'ConfigError';
@@ -102,6 +115,30 @@ function databasePath(name: string, fallback: string): string {
   return value === '' ? ':memory:' : resolve(value);
 }
 
+const PANEL_HOSTS = new Set(['127.0.0.1', '::1', 'localhost', '0.0.0.0', '::']);
+
+function panelConfig(): PanelConfig | null {
+  if (!boolean('PANEL_ENABLED', false)) return null;
+  const host = optional('PANEL_HOST', '127.0.0.1');
+  if (!PANEL_HOSTS.has(host)) {
+    throw new ConfigError(`PANEL_HOST inválido: "${host}" (use 127.0.0.1, ou 0.0.0.0 só dentro do container)`);
+  }
+  const token = process.env['PANEL_TOKEN']?.trim() ?? '';
+  if (token.length < PANEL_TOKEN_MIN_LENGTH) {
+    throw new ConfigError(
+      `PANEL_TOKEN é obrigatório com PANEL_ENABLED=true e precisa ter pelo menos ${PANEL_TOKEN_MIN_LENGTH} caracteres ` +
+        '(gere com: openssl rand -hex 32)',
+    );
+  }
+  return {
+    host,
+    port: integer('PANEL_PORT', 8787, 1024, 65_535),
+    token,
+    logBuffer: integer('PANEL_LOG_BUFFER', 1000, 100, 20_000),
+    announceActions: boolean('PANEL_ANNOUNCE_ACTIONS', true),
+  };
+}
+
 /** Diferente de `optional`: variável definida e vazia significa "desligado". */
 function optionalPath(name: string, fallback: string): string | null {
   const raw = process.env[name];
@@ -140,6 +177,7 @@ function loadConfig(): Config {
     defaultFilter: filterName('DEFAULT_FILTER', 'nenhum'),
     dbPath: databasePath('DB_PATH', 'data/dj.sqlite'),
     playlistsPerUser: integer('PLAYLISTS_PER_USER', 25, 1, 200),
+    panel: panelConfig(),
     ytdlpPath: optional('YTDLP_PATH', 'yt-dlp'),
     ffmpegPath: optional('FFMPEG_PATH', 'ffmpeg'),
     logLevel,

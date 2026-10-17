@@ -44,6 +44,11 @@ function terminateGroup(child: ChildProcess): void {
   }, KILL_GRACE_MS).unref();
 }
 
+/** Processos filhos vivos (yt-dlp/ffmpeg; cada um conta como 1, sem os netos do grupo). */
+export function activeChildCount(): number {
+  return liveGroups.size;
+}
+
 /** Para o shutdown: espera todos os filhos fecharem (ou o prazo acabar). Retorna quantos sobraram. */
 export async function waitForChildren(timeoutMs: number): Promise<number> {
   const pending = [...liveGroups].map(

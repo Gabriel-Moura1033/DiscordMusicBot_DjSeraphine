@@ -7,6 +7,13 @@ services:
     # tini como PID 1: recolhe processos órfãos e repassa SIGTERM ao Node.
     init: true
     env_file: .env
+    environment:
+      # Dentro do container o painel precisa ouvir na interface da rede do container; a exposição
+      # real é decidida em `ports`, que publica só no loopback do host (ADR-046).
+      PANEL_HOST: 0.0.0.0
+    # Painel web: NUNCA publicar em 0.0.0.0. Só esta máquina acessa (veja o teste pela LAN no README).
+    ports:
+      - "127.0.0.1:${PANEL_PORT:-8787}:${PANEL_PORT:-8787}"
     # /tmp em memória: o yt-dlp standalone extrai ~30 MB por execução ali; reiniciar limpa tudo.
     tmpfs:
       - /tmp:size=512m,mode=1777

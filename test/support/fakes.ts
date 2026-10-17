@@ -89,9 +89,7 @@ export class FakePlayer {
 
   stop(): void {
     this.calls.push('stop');
-    this.queue.clearUpcoming();
-    this.queue.loopMode = 'off';
-    this.queue.current = null;
+    this.queue.reset();
   }
 
   destroy(reason: string, options: { readonly discardQueue?: boolean } = {}): void {
@@ -126,7 +124,22 @@ export class FakePlayer {
     return Promise.resolve(this.queue.current ? this.seekResult : { status: 'idle' });
   }
 
-  textChannel: unknown = null;
+  /** Canal de avisos falso: guarda o texto de cada envio. */
+  readonly sent: string[] = [];
+  textChannel = {
+    id: 'txt',
+    name: 'geral',
+    send: (options: { content?: string }) => {
+      this.sent.push(options.content ?? '');
+      return Promise.resolve({});
+    },
+  };
+  streamGeneration = 0;
+
+  nowPlaying(): { readonly elapsedSec: number; readonly paused: boolean; readonly track: Track } | null {
+    const current = this.queue.current;
+    return current ? { track: current, elapsedSec: 42, paused: this.isPaused } : null;
+  }
 
   enqueue(tracks: readonly Track[]): number {
     this.calls.push(`enqueue:${tracks.map((t) => t.id).join(',')}`);

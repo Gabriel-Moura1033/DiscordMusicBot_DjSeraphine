@@ -9,7 +9,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/panel/public','dist/panel/public',{recursive:true})\"",
     "typecheck": "tsc -p tsconfig.test.json",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",

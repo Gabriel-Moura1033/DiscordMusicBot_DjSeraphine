@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { openDatabase } from './db/database.js';
 import { Store } from './db/repositories.js';
 import { startHealthMonitor } from './health.js';
+import { PanelServer } from './panel/server.js';
 import { ControlPanels } from './interactions/controls.js';
 import { routeInteraction } from './interactions/router.js';
 import { suggestionFor } from './interactions/searchMenu.js';
@@ -27,7 +28,7 @@ const AUTOCOMPLETE_SEARCH_TIMEOUT_MS = 15_000;
 /** Limite do Discord para o nome de uma atividade. */
 const ACTIVITY_NAME_LIMIT = 128;
 
-async function checkBinaries(youtube: YouTubeService): Promise<void> {
+async function checkBinaries(youtube: YouTubeService): Promise<string> {
   const ytdlp = await youtube.version();
   if (!ytdlp) throw new Error(`yt-dlp não encontrado ou não executável (YTDLP_PATH=${config.ytdlpPath})`);
 
@@ -35,11 +36,13 @@ async function checkBinaries(youtube: YouTubeService): Promise<void> {
   if (ffmpeg.code !== 0) throw new Error(`ffmpeg não encontrado ou não executável (FFMPEG_PATH=${config.ffmpegPath})`);
 
   logger.info({ ytdlp, ffmpeg: ffmpeg.stdout.split('\n')[0] }, 'external binaries ok');
+  return ytdlp;
 }
 
 async function main(): Promise<void> {
+  const startedAt = Date.now();
   const youtube = new YouTubeService(config);
-  await checkBinaries(youtube);
+  const ytdlpVersion = await checkBinaries(youtube);
   // Falha de migração = não sobe (melhor que rodar com schema errado).
   const db = openDatabase(config.dbPath);
   const store = new Store(db, { playlistsPerUser: config.playlistsPerUser });
@@ -49,6 +52,7 @@ async function main(): Promise<void> {
   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
 
   const panels = new ControlPanels();
+  let panel: PanelServer | null = null;
   const presence = config.presenceEnabled
     ? new PresenceTracker({
         apply: (title) => {
@@ -62,10 +66,12 @@ async function main(): Promise<void> {
     trackStarted: (player, track, announce) => {
       panels.trackStarted(player, track, announce);
       presence?.started(player.guildId, track.title);
+      panel?.notifyChange();
     },
     trackFinished: (player) => {
       panels.trackFinished(player);
       presence?.finished(player.guildId);
+      panel?.notifyChange();
     },
     trackPlayed: (player, track) => {
       try {
@@ -95,6 +101,11 @@ async function main(): Promise<void> {
     : null;
   const services: Services = { config, youtube, players, panels, searches, suggestions, store };
 
+  if (config.panel) {
+    panel = new PanelServer({ config: config.panel, client, players, youtube, ytdlpVersion, startedAt });
+    await panel.start();
+  }
+
   let stopHealthMonitor: (() => void) | null = null;
   client.once(Events.ClientReady, (ready) => {
     logger.info({ user: ready.user.tag, guilds: ready.guilds.cache.size }, 'bot ready');
@@ -118,6 +129,7 @@ async function main(): Promise<void> {
     logger.info({ reason }, 'shutting down');
     stopHealthMonitor?.();
     presence?.stop();
+    await panel?.stop();
     searches.clear();
     // destroyAll grava a fila de cada guild (mantida para o próximo /play) antes de sair dos canais.
     players.persistAll();

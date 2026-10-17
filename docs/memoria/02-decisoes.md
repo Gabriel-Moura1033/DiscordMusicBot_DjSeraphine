@@ -257,3 +257,27 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Sem mudança de comportamento:** garantida por testes de referência escritos e aprovados no código antigo antes de refatorar (18 comandos + 7 cenários do /play), mantidos sem edição, e por 30 casos de equivalência comando × chamada direta.
 - **Detalhe:** respostas adiadas (`/seek`, `/replay`, `/filtro`) recebem o hook `beforeSlow`, para o `deferReply` acontecer só depois da validação, como antes.
 - **Contexto:** pedido do usuário para a Fase 7 ("nada de lógica duplicada só para o painel"), dividida em 7a (refatoração) e 7b (painel).
+
+## ADR-044 — ID estável por item da fila
+- **Data:** 2026-10-17
+- **Decisão:** a `Queue` guarda `QueueEntry { id, track }` internamente (API pública igual: `current`, `upcoming`…). O painel opera por ID; o ID vira posição e a operação de posição da camada de controle roda no mesmo tick. Item que não existe mais = "essa faixa não está mais na fila", sem efeito.
+- **Descartado:** ID dentro do `Track` (vários lugares comparam faixas por identidade — botões, pré-carga, autoplay — e a mesma faixa pode estar duas vezes na fila).
+
+## ADR-045 — Logs ao vivo com pino.multistream e scrubber
+- **Data:** 2026-10-17
+- **Decisão:** `pino.multistream([stdout, LogBuffer])`; o stdout continua idêntico (JSON em produção, pino-pretty em dev via `pino.transport`). Redact ampliado (token, discordToken, panelToken, authorization, cookie, csrf, session) + scrubber que troca o **valor** de DISCORD_TOKEN e PANEL_TOKEN em qualquer linha (ex.: dentro da mensagem de um erro) antes do stdout e do buffer. Buffer só existe com o painel ligado.
+
+## ADR-046 — Painel em node:http no mesmo processo; rede e segurança
+- **Data:** 2026-10-17
+- **Decisão:** `node:http` puro (confirmado pelo usuário): ~10 rotas, SSE nativo, zero dependências; Fastify traria schema/plugins que não compensam para um painel local de um usuário. Rotas em `PanelApp.handle()` (testáveis sem abrir porta); transporte fino em `server.ts`.
+- **Rede (conflito apontado e aceito pelo usuário):** escutar em 127.0.0.1 dentro do container tornaria o painel inalcançável (o tráfego publicado chega pela interface da rede do container). Por isso `PANEL_HOST` (padrão 127.0.0.1 fora do Docker) e o compose força `0.0.0.0` no container, publicando a porta só em `127.0.0.1:PORT` do host. Validado: `podman port dj` → `127.0.0.1:8787`; acesso pelo IP da LAN recusado.
+- **Segurança:** token ≥ 32 caracteres obrigatório com o painel ligado (sem ele o bot não sobe); login com comparação em tempo constante e 5 tentativas/min; sessão em memória (12 h) em cookie HttpOnly + SameSite=Strict (sem Secure: HTTP local); CSRF por sessão no header `X-CSRF-Token` + Origin `http://localhost:PORT` ou `http://127.0.0.1:PORT` em todo POST; Host restrito aos mesmos dois nomes (DNS rebinding); rate limit 5 mensagens/min e 60 ações/min; CSP `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://i.ytimg.com…` com HTML, `/app.css` e `/app.js` separados (ajuste do usuário: sem inline/hash); corpo ≤ 16 KB.
+- **Sem a regra do canal de voz** (revisa ADR-017 só para o painel): o dono controla de fora; toda ação é auditada com `source: painel` e pode ser anunciada no canal.
+
+## ADR-047 — Mensagens pelo painel
+- **Data:** 2026-10-17
+- **Decisão:** só canais de texto/anúncio com View + Send; `allowedMentions: { parse: [] }` por padrão; a opção libera `['users', 'roles']`; `everyone` nunca entra no `parse` (mesmo "@everyone" digitado não notifica). Resposta por ID com `failIfNotExists`. Auditoria com guild, canal, tamanho, id da mensagem, sem o conteúdo. Erros do Discord traduzidos (10008, 50001, 50013, 50035…).
+
+## ADR-048 — Estado do painel por foto + SSE
+- **Data:** 2026-10-17
+- **Decisão:** em vez de instrumentar cada mutação, o `StateHub` reconstrói a foto a cada 1 s (e imediatamente em ações do painel e eventos do player) e publica quando a chave de mudança muda — tudo menos a posição corrente; seek é detectado por `GuildPlayer.streamGeneration`. Reenvio a cada 5 s corrige a deriva. A barra de progresso anda no navegador (`positionSec` + `at` + `speed`). A página aplica ações de forma otimista e volta ao último estado real se o bot recusar (HTTP 409).
