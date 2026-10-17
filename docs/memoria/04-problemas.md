@@ -70,3 +70,8 @@ Status: `aberto` · `contornado` · `resolvido`.
 - **Sintoma:** `joMjcNtxuTU` (162 s) teve "track started" de novo após 122 s, sem nenhum warn (sem falha do yt-dlp/ffmpeg nem erro do AudioPlayer). Como a mesma faixa recomeçou, provavelmente o loop de faixa estava ligado.
 - **Hipótese:** stream cortado sem erro, ou `failure()` estourou o prazo de 3 s e o fim foi tratado como natural.
 - **Ação:** adicionados logs `track ended` (playedSec, durationSec, endedBy) e `track ended early` (warn, com códigos de saída e stderr dos processos) para diagnosticar na próxima ocorrência.
+
+## P-014 — "O aplicativo não respondeu" / deploy com `Missing Access`
+- **Status:** resolvido (configuração)
+- **Causas vistas:** (1) usar no Discord o comando de **outra aplicação** com o mesmo nome de comando; o log do bot fica vazio. (2) `DISCORD_GUILD_ID` de um servidor onde o bot não está → deploy falha com `Missing Access`.
+- **Diagnóstico rápido:** conferir no log o `user` do "bot ready" e se a interação aparece; `Routes.userGuilds()` lista onde o bot está.

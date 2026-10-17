@@ -55,3 +55,8 @@ Diário cronológico, mais recente por último.
 - `DISCORD_GUILD_ID` alterado no `.env`; comandos registrados na nova guild e container recriado (`up -d --force-recreate`, necessário para reler o `env_file`).
 - O servidor de testes anterior continua com os 12 comandos registrados e o bot como membro.
 - Lembrete: trocar de guild exige rodar o deploy de comandos de novo antes de reiniciar.
+
+## 2026-10-17 — Troca de aplicação do Discord
+- "O aplicativo não respondeu": o comando usado era de outra aplicação (sem processo rodando), não da que estava no `.env`. Confirmado via API (`Routes.currentApplication`).
+- Usuário trocou token/client id para a aplicação definitiva e a guild para o servidor onde ela está. Primeira tentativa de deploy deu `Missing Access` (bot não era membro da guild configurada).
+- Deploy ok na guild nova (12 comandos); a nova aplicação também tinha os globais antigos `/test` e `/challenge`, removidos pelo deploy (P-012). Container recriado, "bot ready" em 1 guild.
