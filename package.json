@@ -1,0 +1,39 @@
+{
+  "name": "dj",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bot de música para Discord (YouTube via yt-dlp)",
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "deploy": "node dist/deploy-commands.js",
+    "deploy:dev": "tsx src/deploy-commands.ts"
+  },
+  "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.27.0",
+    "dotenv": "^18.0.8",
+    "pino": "^10.4.0"
+  },
+  "optionalDependencies": {
+    "opusscript": "^0.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "pino-pretty": "^13.2.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "@discordjs/opus@0.10.0": true,
+    "esbuild@0.28.2": true
+  }
+}

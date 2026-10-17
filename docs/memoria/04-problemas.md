@@ -35,3 +35,8 @@ Status: `aberto` · `contornado` · `resolvido`.
 ## P-007 — Lives
 - **Status:** contornado
 - **Solução:** rejeitadas na resolução (`is_live`) e no stream (`--match-filter !is_live`).
+
+## P-008 — npm 12 bloqueia scripts de instalação
+- **Status:** resolvido
+- **Sintoma:** `install scripts blocked because they are not covered by allowScripts`; `@discordjs/opus` fica sem binário nativo.
+- **Solução:** `npm install-scripts approve @discordjs/opus esbuild` (grava `allowScripts` no `package.json`). Ao atualizar versões, aprovar de novo.
