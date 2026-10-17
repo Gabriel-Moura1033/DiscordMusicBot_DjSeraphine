@@ -3,27 +3,45 @@ import type { Readable, Writable } from 'node:stream';
 import { logger } from '../logger.js';
 
 const STDERR_LIMIT = 16 * 1024;
+const KILL_GRACE_MS = 2_000;
 
 /**
- * Todo filho roda em um process group próprio (`detached`) e é morto com `kill(-pid)`.
- * Necessário porque o binário standalone do yt-dlp (PyInstaller) faz fork de um segundo
- * processo, e o yt-dlp ainda pode iniciar o Deno; SIGKILL só no pid principal deixaria órfãos.
+ * Todo filho roda em um process group próprio (`detached`) e é sinalizado com `kill(-pid)`.
+ * Necessário porque o binário standalone do yt-dlp (PyInstaller onefile) é um bootloader que
+ * faz fork do interpretador, e o yt-dlp ainda pode iniciar o Deno.
  */
 const liveGroups = new Set<ChildProcess>();
 
 process.once('exit', () => {
-  for (const child of liveGroups) killGroup(child);
+  for (const child of liveGroups) signalGroup(child, 'SIGKILL');
 });
 
-function killGroup(child: ChildProcess): void {
+function hasExited(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
   if (child.pid === undefined) return;
   try {
-    process.kill(-child.pid, 'SIGKILL');
+    process.kill(-child.pid, signal);
   } catch (error) {
     if (!isErrnoException(error) || error.code !== 'ESRCH') {
-      logger.warn({ err: error, pid: child.pid }, 'failed to kill process group');
+      logger.warn({ err: error, pid: child.pid, signal }, 'failed to signal process group');
     }
   }
+}
+
+/**
+ * SIGTERM primeiro: o bootloader do PyInstaller repassa ao filho e apaga o diretório
+ * extraído em /tmp (_MEIxxxx); com SIGKILL direto ele vazaria ~30 MB a cada skip.
+ * SIGKILL só se o líder ainda estiver vivo depois do prazo.
+ */
+function terminateGroup(child: ChildProcess): void {
+  if (child.pid === undefined || hasExited(child)) return;
+  signalGroup(child, 'SIGTERM');
+  setTimeout(() => {
+    if (!hasExited(child)) signalGroup(child, 'SIGKILL');
+  }, KILL_GRACE_MS).unref();
 }
 
 export function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
@@ -94,7 +112,7 @@ export async function runCapture(
     size += chunk.length;
     if (size > options.maxStdoutBytes) {
       overflow = true;
-      killGroup(child);
+      terminateGroup(child);
       return;
     }
     chunks.push(chunk);
@@ -104,12 +122,11 @@ export async function runCapture(
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
-    killGroup(child);
+    terminateGroup(child);
   }, options.timeoutMs);
 
   const exit = await waitExit(child);
   clearTimeout(timer);
-  killGroup(child);
 
   const stderrText = overflow ? `${stderr()}\n[dj] stdout excedeu ${options.maxStdoutBytes} bytes` : stderr();
   return {
@@ -161,15 +178,16 @@ export function spawnPipeline(
     if (killed || finished) return;
     killed = true;
     src.stdout.unpipe(dec.stdin);
-    killGroup(src);
-    killGroup(dec);
+    // Sem isso, um ffmpeg bloqueado escrevendo num stdout que ninguém lê ignora o SIGTERM
+    // e o 'close' nunca dispara (o Node espera os pipes fecharem).
+    src.stdout.destroy();
+    dec.stdin.destroy();
+    dec.stdout.destroy();
+    terminateGroup(src);
+    terminateGroup(dec);
   };
 
   const done = Promise.all([waitExit(src), waitExit(dec)]).then(([srcExit, decExit]): PipelineResult => {
-    // O líder do grupo pode sair antes dos filhos (PyInstaller/Deno); garante que nada sobra.
-    killGroup(src);
-    killGroup(dec);
-    // Depois disso o pgid pode ser reutilizado pelo SO; kill() vira no-op.
     finished = true;
     return {
       killed,
