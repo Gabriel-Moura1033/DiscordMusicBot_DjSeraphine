@@ -83,3 +83,19 @@ Status: `aberto` · `contornado` · `resolvido`.
 - **Nota:** timers do Node (libuv, `CLOCK_MONOTONIC`) não contam o tempo suspenso; `Date.now()` conta. O timer de inatividade não "dispara atrasado" ao acordar; o `isStale()` usa `Date.now()` e o cache de voice states, atualizado quando o gateway reconecta.
 - **Solução:** log de toda transição de estado da conexão (`voice connection state`); watchdog de 20 s fora de Ready → `rejoin()` (1×) → se falhar, avisa e destrói; `GuildPlayer.isStale()` (destruída, presa fora de Ready ou bot ausente do canal segundo o cache de voice states) faz `PlayerManager.get()` descartar o player para o /play reconectar.
 - **Limitação:** quando o watchdog desiste, a fila da guild é perdida.
+
+## P-016 — `client.ws.status` nunca sai de Ready
+- **Status:** resolvido
+- **Sintoma:** com a rede do container desconectada, o monitor do gateway não registrou nada por 3+ min e o processo não saiu.
+- **Causa:** no discord.js 14.27, `WebSocketManager.status` vira Ready no primeiro ready e não é atualizado em quedas/reconexões; quem muda é `client.ws.shards.get(id).status` (Connecting, Resuming, Identifying…).
+- **Solução:** `src/health.ts` considera o gateway pronto só se **todos os shards** estão Ready. Validado: rede cortada → zumbi detectado em ~110 s (heartbeat sem ACK) → `GATEWAY_DOWN_EXIT_MINUTES=1` → exit 1 após 60 s; podman reinicia com `unless-stopped`.
+
+## P-017 — Bloqueio regional classificado como "unknown"
+- **Status:** resolvido (encontrado pelos testes da Fase 1)
+- **Causa:** a mensagem real do yt-dlp é "The uploader has not made this video available in your country"; o regex exigia "not available in your country".
+- **Solução:** regex `geo_blocked` passa a casar "available in your country".
+
+## P-018 — Aviso ERESOLVE do opusscript
+- **Status:** resolvido
+- **Causa:** `prism-media@1.3.5` declara peer opcional `opusscript@^0.0.8`; o projeto tinha `^0.1.1`.
+- **Solução:** `opusscript` fixado em `^0.0.8` (só é usado se o `@discordjs/opus` nativo falhar).

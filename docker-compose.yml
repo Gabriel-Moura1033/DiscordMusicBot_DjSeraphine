@@ -11,7 +11,17 @@ services:
     tmpfs:
       - /tmp:size=512m,mode=1777
     mem_limit: 768m
-    stop_grace_period: 10s
+    # Shutdown gracioso espera até 5 s pelos processos filhos; folga para fechar o gateway.
+    stop_grace_period: 15s
+    # Repete o HEALTHCHECK do Dockerfile (podman ignora o da imagem em formato OCI).
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'f="$${HEARTBEAT_FILE-/tmp/dj-heartbeat}"; [ -z "$$f" ] || { [ -f "$$f" ] && [ $$(( $$(date +%s) - $$(stat -c %Y "$$f") )) -lt 60 ]; }'
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
     logging:
       driver: json-file
       options:

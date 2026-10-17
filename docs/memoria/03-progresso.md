@@ -72,3 +72,9 @@ Diário cronológico, mais recente por último.
 
 ## 2026-10-17 — Causa do P-015
 - Usuário confirmou: PC host em sleep. P-015 atualizado (causa + nota sobre timers e suspensão); README ganhou linha de troubleshooting com `systemd-inhibit`.
+
+## 2026-10-17 — Fase 1: testes e operação
+- vitest 5 + `test/setup.ts` (bloqueia spawn/exec/fetch); 103 testes: URL (aceitos/rejeitados/buscas), fila (add, remove, shuffle, loop off/track/queue, skip/drop, playnow), erros do yt-dlp, formatação. `npm test`, `npm run typecheck` (inclui test/). Testes rodam no build da imagem.
+- `src/health.ts` (heartbeat + exit 1 com gateway fora), shutdown gracioso em `src/index.ts`, `waitForChildren()` em `process.ts`. HEALTHCHECK no Dockerfile e no compose; `stop_grace_period` 15 s. Novas variáveis `HEARTBEAT_FILE`, `GATEWAY_DOWN_EXIT_MINUTES`.
+- Validado: imagem com testes passando; `healthy`; stop → "bye" exit 0; 2 pipelines encerrados em 9 ms sem `/tmp/_MEI*`; rede cortada → exit 1 → podman reinicia; `podman compose top dj` só com init + node.
+- Problemas: P-016, P-017, P-018. ADRs: 028–031 (030/031 antecipam decisões das Fases 2 e 6).

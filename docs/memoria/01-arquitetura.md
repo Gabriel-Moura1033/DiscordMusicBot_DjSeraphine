@@ -32,8 +32,14 @@
 
 ## Desconexão
 - `VoiceConnectionStatus.Disconnected`: tenta reconectar (Signalling/Connecting em 5 s); se falhar, `destroy()`.
+- Watchdog (ADR-027): fora de Ready por 20 s → `rejoin()` (1×) → mais 20 s → aviso + `destroy()`. `PlayerManager.get()` descarta players `isStale()`.
 - `Destroyed` → `PlayerManager` remove a guild do Map.
 
 ## Processos filhos
-- `spawnPipeline()` liga `yt-dlp.stdout → ffmpeg.stdin`; `kill()` idempotente envia SIGKILL aos dois e remove listeners.
+- `spawnPipeline()` liga `yt-dlp.stdout → ffmpeg.stdin`, cada processo em process group próprio. `kill()` idempotente fecha os pipes, manda SIGTERM ao grupo e SIGKILL após 2 s se preciso (ADR-021).
 - `tini` (via `init: true` no compose) é PID 1 no container.
+
+## Operação (Fase 1)
+- `src/health.ts`: heartbeat + saída com exit 1 se o gateway ficar fora por `GATEWAY_DOWN_EXIT_MINUTES` (ADR-029). Iniciado no primeiro `ClientReady`.
+- Shutdown (`src/index.ts`): SIGTERM/SIGINT → para o monitor → `players.destroyAll()` (sai dos canais, mata pipelines) → `waitForChildren(5 s)` → `client.destroy()` → `exit`. Segundo sinal força saída.
+- Testes: `test/` (vitest, puros). Rodam no estágio `build` do Dockerfile.

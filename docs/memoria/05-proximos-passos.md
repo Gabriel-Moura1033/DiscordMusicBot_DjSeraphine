@@ -1,10 +1,18 @@
 # 05 — Próximos passos
 
+## Leva de funcionalidades (fases aprovadas em 2026-10-17)
+- [x] Fase 1 — Testes e operação
+- [ ] Fase 2 — Interface no chat (botões, /search, autocomplete, presença)
+- [ ] Fase 3 — Comandos de fila (/move, /skipto, /clear, histórico, /previous, /replay, /seek)
+- [ ] Fase 4 — Autoplay
+- [ ] Fase 5 — Qualidade de áudio (loudnorm, pré-carga, SponsorBlock, /filtro)
+- [ ] Fase 6 — Persistência SQLite
+
 ## Prioridade alta
 - [ ] Testar ponta a ponta num servidor real (play/skip/stop/leave, playlist, vídeo privado, idade, timer de inatividade, /queue paginado)
 - [ ] Confirmar que a voz funciona com DAVE (áudio audível) e registrar em 04 se houver quirk
 - [x] Verificar ausência de zumbis após kills em sequência (feito em script no container, 2026-10-17); repetir com o bot real via `docker compose top dj`
-- [ ] Testes unitários de `url.ts`, `Queue.ts` e `errors.ts` (node:test, sem dependência extra)
+- [x] Testes unitários de `url.ts`, `Queue.ts`, `errors.ts` e `format.ts` (vitest, Fase 1, 2026-10-17)
 - [ ] Fixar versões de `DENO_IMAGE_TAG` e da imagem Node no Dockerfile para builds reprodutíveis
 
 ## Prioridade média
@@ -13,7 +21,7 @@
 - [ ] `/move <de> <para>` na fila
 - [ ] Preservar a fila quando a conexão de voz morre (reconectar o mesmo `GuildPlayer` em vez de destruir) — P-015
 - [ ] Se o 403 (P-011) continuar frequente: PO Token provider (plugin bgutil para yt-dlp) no container
-- [ ] Healthcheck do container (estado do gateway)
+- [x] Healthcheck do container + exit por gateway fora (Fase 1, 2026-10-17)
 
 ## Ideias futuras
 - [ ] Persistir fila em SQLite para sobreviver a restart

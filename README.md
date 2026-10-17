@@ -67,6 +67,22 @@ npm run dev          # tsx watch, logs com pino-pretty
 
 Build de produção: `npm run build && npm start`.
 
+## Testes
+
+```bash
+npm test            # vitest run (também roda no build da imagem; falha = imagem não gerada)
+npm run test:watch
+npm run typecheck   # tsc sobre src/ e test/
+```
+
+Os testes são **puros**: um setup global faz `spawn`/`exec` e `fetch` lançarem erro, então nada depende de rede, yt-dlp, ffmpeg ou YouTube.
+
+## Operação
+
+- **Healthcheck:** o bot grava `HEARTBEAT_FILE` a cada 15 s enquanto o gateway do Discord está conectado; o container fica `unhealthy` se o arquivo ficar mais de 60 s sem atualizar (`docker compose ps`).
+- **Queda do gateway:** se o gateway ficar fora por mais de `GATEWAY_DOWN_EXIT_MINUTES` (padrão 5), o processo encerra com código 1 e o `restart: unless-stopped` sobe outro. A detecção da queda em si leva ~1–2 min (heartbeat do Discord), então o tempo total é o valor configurado + ~2 min.
+- **Shutdown:** `docker compose stop` sai dos canais de voz, encerra yt-dlp/ffmpeg (espera até 5 s), fecha o gateway e sai com 0. Um segundo sinal força a saída.
+
 ## Variáveis de ambiente
 
 Veja [`.env.example`](.env.example). Obrigatórias: `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID`. Valores inválidos fazem o bot recusar a subir com uma mensagem `[config] ...`.
@@ -102,6 +118,15 @@ docker compose exec dj yt-dlp -v -F "https://www.youtube.com/watch?v=ID"
 | Slash commands não aparecem | Comandos não registrados, guild errada ou convite sem `applications.commands` | Rode o deploy de novo, confira `DISCORD_GUILD_ID`, reconvide com o link acima e recarregue o Discord (Ctrl+R) |
 | "Comando desconhecido" | Registro desatualizado | Rode o deploy de comandos de novo |
 | Áudio picotando | CPU do host saturada | Verifique `docker stats`; a codificação Opus roda no processo Node |
+
+### Container e operação
+
+| Sintoma | Causa provável | O que fazer |
+|---|---|---|
+| `docker compose ps` mostra `unhealthy` | Gateway desconectado (rede, Discord fora) ou processo travado | Veja `docker compose logs dj` (`gateway not ready`); se passar de `GATEWAY_DOWN_EXIT_MINUTES` o processo reinicia sozinho |
+| Container reiniciando em loop | Token inválido, rede sem acesso ao Discord, ou config inválida (`[config] ...` no log) | Corrija o `.env`; com rede fora, cada ciclo dura `GATEWAY_DOWN_EXIT_MINUTES` |
+| Podman não mostra status de saúde | Podman ignora `HEALTHCHECK` em imagens OCI | O `docker-compose.yml` já repete o check; `podman healthcheck run dj` roda manualmente |
+| `docker build` falha em `npm test` | Teste quebrado | Rode `npm test` localmente para ver qual |
 
 ### Processos
 

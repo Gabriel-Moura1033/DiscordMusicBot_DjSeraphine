@@ -15,12 +15,14 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# ---------- build TypeScript ----------
+# ---------- testes + build TypeScript ----------
 FROM deps AS build
 RUN npm ci
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.test.json vitest.config.ts ./
 COPY src ./src
-RUN npm run build
+COPY test ./test
+# Testes puros (sem rede/yt-dlp/ffmpeg): se falharem, a imagem não é gerada.
+RUN npm run typecheck && npm test && npm run build
 
 # ---------- runtime ----------
 FROM docker.io/library/node:${NODE_VERSION}-bookworm-slim AS runtime
@@ -56,5 +58,12 @@ COPY --chown=node:node package.json ./
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 USER node
+
+# Heartbeat gravado pelo processo enquanto o gateway está conectado (ADR-029).
+# HEARTBEAT_FILE definido e vazio = heartbeat desligado = check sempre ok.
+# Obs.: podman ignora HEALTHCHECK em imagens OCI; o docker-compose.yml repete o check.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD f="${HEARTBEAT_FILE-/tmp/dj-heartbeat}"; [ -z "$f" ] || { [ -f "$f" ] && [ $(( $(date +%s) - $(stat -c %Y "$f") )) -lt 60 ]; }
+
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "dist/index.js"]

@@ -52,7 +52,7 @@ const PATTERNS: ReadonlyArray<readonly [YtErrorCode, RegExp]> = [
   ['private', /Private video|members[- ]only|Join this channel to get access/i],
   ['age_restricted', /confirm your age|age[- ]restricted|inappropriate for some users/i],
   ['bot_check', /not a bot|HTTP Error 429|Too Many Requests/i],
-  ['geo_blocked', /not available in your country|blocked it in your country|geo[- ]?restrict/i],
+  ['geo_blocked', /available in your country|blocked it in your country|geo[- ]?restrict/i],
   ['live', /live event will begin|Premieres in|is_upcoming/i],
   [
     'unavailable',

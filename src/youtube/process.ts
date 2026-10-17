@@ -44,6 +44,26 @@ function terminateGroup(child: ChildProcess): void {
   }, KILL_GRACE_MS).unref();
 }
 
+/** Para o shutdown: espera todos os filhos fecharem (ou o prazo acabar). Retorna quantos sobraram. */
+export async function waitForChildren(timeoutMs: number): Promise<number> {
+  const pending = [...liveGroups].map(
+    (child) => new Promise<void>((resolve) => {
+      if (hasExited(child)) resolve();
+      else child.once('close', () => resolve());
+    }),
+  );
+  if (pending.length === 0) return 0;
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([
+    Promise.all(pending),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    }),
+  ]);
+  clearTimeout(timer);
+  return [...liveGroups].filter((child) => !hasExited(child)).length;
+}
+
 export function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
 }

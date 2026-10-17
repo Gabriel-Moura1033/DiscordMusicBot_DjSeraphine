@@ -13,6 +13,10 @@ export interface Config {
   readonly ytdlpPath: string;
   readonly ffmpegPath: string;
   readonly logLevel: string;
+  /** `null` = heartbeat desligado. */
+  readonly heartbeatFile: string | null;
+  /** 0 = nunca sai por gateway desconectado. */
+  readonly gatewayDownExitMs: number;
   readonly isProduction: boolean;
 }
 
@@ -47,6 +51,16 @@ function snowflake(name: string): string {
   return value;
 }
 
+/** Diferente de `optional`: variável definida e vazia significa "desligado". */
+function optionalPath(name: string, fallback: string): string | null {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const value = raw.trim();
+  if (value === '') return null;
+  if (!value.startsWith('/')) throw new ConfigError(`${name} deve ser um caminho absoluto (recebido: "${value}")`);
+  return value;
+}
+
 const LOG_LEVELS = new Set(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']);
 
 function loadConfig(): Config {
@@ -66,6 +80,8 @@ function loadConfig(): Config {
     ytdlpPath: optional('YTDLP_PATH', 'yt-dlp'),
     ffmpegPath: optional('FFMPEG_PATH', 'ffmpeg'),
     logLevel,
+    heartbeatFile: optionalPath('HEARTBEAT_FILE', '/tmp/dj-heartbeat'),
+    gatewayDownExitMs: integer('GATEWAY_DOWN_EXIT_MINUTES', 5, 0, 1440) * 60_000,
     isProduction: process.env['NODE_ENV'] === 'production',
   };
 }

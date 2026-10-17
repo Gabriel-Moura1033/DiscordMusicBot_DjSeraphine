@@ -11,6 +11,8 @@
 - **YtError** — erro tipado do yt-dlp; `code`: `private` | `unavailable` | `age_restricted` | `geo_blocked` | `bot_check` | `live` | `too_long` | `not_found` | `forbidden` | `extractor` | `timeout` | `unknown`.
 - **Guard** — pré-condição do comando: `voice-join` (/play: usuário em canal de voz, o mesmo do bot se conectado) | `same-channel` (controles: bot conectado e usuário no mesmo canal) | `active-player` (/queue, /nowplaying: só bot conectado).
 - **AdvanceOptions** — `{ skip, drop }` passado a `Queue.advance()`: `skip` ignora loop de faixa; `drop` não devolve a atual ao fim da fila no loop de fila.
+- **Heartbeat / health monitor** — `src/health.ts`: grava `HEARTBEAT_FILE` com o gateway Ready (status **por shard**) e dispara shutdown com exit 1 após `GATEWAY_DOWN_EXIT_MINUTES`.
+- **Testes puros** — `test/*.test.ts` com `test/setup.ts` bloqueando `child_process` e `fetch`.
 - **pendingAdvance** — `AdvanceOptions` registrado por /skip, /stop e /playnow antes de parar o player; consumido no próximo Idle.
 - **createPlayCommand(name, description, mode)** — fábrica em `src/commands/play.ts` usada por /play (`append`) e /playnow (`now`).
 
@@ -36,5 +38,7 @@
 | `YTDLP_PATH` | não | `yt-dlp` | binário do yt-dlp |
 | `FFMPEG_PATH` | não | `ffmpeg` | binário do ffmpeg |
 | `YTDLP_AUTO_UPDATE` | não | `true` | `yt-dlp -U` no entrypoint do container |
+| `HEARTBEAT_FILE` | não | `/tmp/dj-heartbeat` | arquivo do healthcheck; definido vazio = desligado |
+| `GATEWAY_DOWN_EXIT_MINUTES` | não | 5 | gateway fora por mais que isso → exit 1 (0 desliga) |
 | `LOG_LEVEL` | não | `info` | nível do pino |
 | `NODE_ENV` | não | — | `production` desativa pino-pretty |
