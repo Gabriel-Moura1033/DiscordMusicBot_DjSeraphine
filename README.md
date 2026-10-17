@@ -12,9 +12,14 @@ Contexto do projeto, decisões e problemas conhecidos: [`docs/memoria/00-entrada
 | `/playnow musica:<link ou nome>` | Pula a faixa atual e toca a pedida na hora; o resto da fila continua igual |
 | `/search musica:<nome>` | Mostra os 5 primeiros resultados num menu; quem buscou escolhe em até 60 s |
 | `/skip` `/stop` `/pause` `/resume` | Controle da reprodução (`/stop` limpa a fila mas mantém o bot no canal) |
+| `/skipto posicao:<n>` | Pula direto para a posição `n` da fila (como vários `/skip`; no loop de fila as puladas vão para o fim) |
+| `/previous` | Volta para a faixa anterior; a atual vai para o início da fila |
+| `/replay` | Recomeça a faixa atual |
+| `/seek tempo:<mm:ss\|hh:mm:ss>` | Vai para um ponto da faixa atual (leva ~2–7 s; a música continua tocando até lá) |
 | `/queue` | Fila paginada (10 por página) |
 | `/nowplaying` | Faixa atual com barra de progresso e botões de controle |
-| `/remove posicao:<n>` `/shuffle` `/loop modo:<desligado\|faixa\|fila>` | Edição da fila |
+| `/remove posicao:<n>` `/move de:<n> para:<n>` `/shuffle` `/loop modo:<desligado\|faixa\|fila>` | Edição da fila |
+| `/clear` | Limpa a fila sem parar a faixa atual |
 | `/volume nivel:<0-100>` | Volume (efeito imediato) |
 | `/leave` | Sai do canal e descarta a fila |
 
@@ -105,6 +110,8 @@ Veja [`.env.example`](.env.example). Obrigatórias: `DISCORD_TOKEN`, `DISCORD_CL
 | `Sign in to confirm you're not a bot`, `HTTP Error 429` | IP marcado pelo YouTube (comum em VPS/datacenter) ou excesso de requisições | Aguarde algumas horas; rode em IP residencial. O projeto não usa cookies (decisão ADR-014) |
 | `Sign in to confirm your age` | Vídeo com restrição de idade | Sem cookies não há como tocar; o bot pula e avisa |
 | Desafios JS / `No supported JavaScript runtime` | Deno ausente | `docker compose exec dj deno --version`; a imagem já inclui |
+| `/seek` responde "Não consegui mudar a posição" | yt-dlp falhou ao abrir o stream na nova posição (já tenta 3×) | A música segue de onde estava; tente de novo. Veja `seek failed` no log |
+| `/seek` demora | O áudio até o ponto pedido é baixado e descartado (ADR-035); em vídeos longos chega a ~7 s | Normal; a faixa continua tocando enquanto isso |
 | Busca retorna o vídeo errado | `ytsearch1` pega só o 1º resultado | Use `/search` para escolher, o autocomplete do `/play`, ou o link direto |
 | Autocomplete não sugere nada | Texto com menos de 3 letras, link, busca lenta (> ~2 s) ou `AUTOCOMPLETE_ENABLED=false` | Digite mais um pouco (a busca segue em segundo plano e a próxima tecla usa o cache) ou envie o texto: o `/play` busca do mesmo jeito |
 | `Sign in to confirm you're not a bot` aparece depois de ativar o autocomplete | Cada tecla pode virar uma busca no YouTube a partir do seu IP | `AUTOCOMPLETE_ENABLED=false` e rode o deploy de comandos de novo |

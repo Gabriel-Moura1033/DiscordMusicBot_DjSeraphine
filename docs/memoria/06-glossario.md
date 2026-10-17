@@ -21,6 +21,11 @@
 - **customId** — `ctl:<toggle|skip|loop|stop>:<guildId>` (botões) e `srch:<guildId>:<userId>:<nonce>` (menu do /search); formato em `src/interactions/customId.ts`. `queue:` ainda é do collector do /queue.
 - **Router** — `src/interactions/router.ts`: handler global de `interactionCreate` (comandos, autocomplete, botões, menus).
 - **SuggestionProvider** — autocomplete com debounce, cache LRU/TTL, dedupe, limite de concorrência e timeout; nunca lança.
+- **History** — `src/player/History.ts`: faixas que tocaram (com áudio), mais recente primeiro, até `HISTORY_SIZE`; repetições seguidas contam uma vez. `/previous` faz `pop()`.
+- **prepareSkipTo(n)** — `Queue`: reposiciona a fila para o /skipto; seguido de `advance({ skip: true, drop: true })`. Equivale a n × /skip (testado nos 3 modos).
+- **startOffsetSec** — posição em que o stream atual começou (/seek); somada ao `playbackDuration` no /nowplaying e nos logs.
+- **SeekResult** — `ok` | `idle` | `busy` (entre faixas) | `superseded` (faixa mudou/outro seek) | `failed` (`YtError`).
+- **isChangingTrack** — `GuildPlayer`: player Idle com faixa atual = `onTrackEnd` em andamento; /skipto, /previous e /seek recusam com "tente de novo".
 - **GuildRequester** — o que os guards (`checkJoin`, `checkPlayer`) leem de uma interação; vale para comandos e componentes.
 
 ## Convenções de código
@@ -42,6 +47,7 @@
 | `MAX_TRACK_DURATION_SECONDS` | não | 7200 | duração máxima por vídeo |
 | `IDLE_TIMEOUT_SECONDS` | não | 300 | sozinho no canal / fila vazia até desconectar |
 | `DEFAULT_VOLUME` | não | 50 | volume inicial (0–100) |
+| `HISTORY_SIZE` | não | 20 | faixas lembradas por guild para o /previous (1–100) |
 | `YTDLP_PATH` | não | `yt-dlp` | binário do yt-dlp |
 | `FFMPEG_PATH` | não | `ffmpeg` | binário do ffmpeg |
 | `YTDLP_AUTO_UPDATE` | não | `true` | `yt-dlp -U` no entrypoint do container |

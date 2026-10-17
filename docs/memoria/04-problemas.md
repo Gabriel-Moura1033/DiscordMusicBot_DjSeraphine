@@ -99,3 +99,10 @@ Status: `aberto` · `contornado` · `resolvido`.
 - **Status:** resolvido
 - **Causa:** `prism-media@1.3.5` declara peer opcional `opusscript@^0.0.8`; o projeto tinha `^0.1.1`.
 - **Solução:** `opusscript` fixado em `^0.0.8` (só é usado se o `@discordjs/opus` nativo falhar).
+
+## P-019 — `readable` no fim do stream parecia "áudio pronto"
+- **Status:** resolvido
+- **Sintoma:** teste de integração do /seek: vídeo inexistente dava "ready" em ~0,9 s. O /seek trocaria para um stream vazio e a faixa seria pulada com erro, em vez de continuar tocando.
+- **Causa:** Node emite `readable` também no fim do stream, sem dados.
+- **Solução:** `waitForAudio` só aceita `readable` com `readableLength > 0`; sem dados, espera o resultado do pipeline e devolve o erro classificado.
+- **Lição:** ao esperar "primeiro dado" de um stream, conferir `readableLength`.

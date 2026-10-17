@@ -58,6 +58,29 @@ export class Queue {
     return removed ?? null;
   }
 
+  /** Move a faixa de `from` para `to` (1-based sobre os próximos). Retorna a faixa movida. */
+  move(from: number, to: number): Track | null {
+    if (!this.isPosition(from) || !this.isPosition(to)) return null;
+    const [moved] = this.items.splice(from - 1, 1);
+    if (!moved) return null;
+    this.items.splice(to - 1, 0, moved);
+    return moved;
+  }
+
+  /**
+   * Prepara a fila para pular direto para `position`, como `/skip` repetido: as faixas antes dela
+   * saem da fila, exceto no loop de fila, em que vão para o fim depois da atual. Deve ser seguido
+   * de `advance({ skip: true, drop: true })` (a atual já foi reposicionada aqui). Retorna quantas
+   * faixas foram puladas, sem contar a atual.
+   */
+  prepareSkipTo(position: number): number | null {
+    if (!this.isPosition(position)) return null;
+    const skipped = this.items.slice(0, position - 1);
+    const rest = this.items.slice(position - 1);
+    this.items = this.loopMode === 'queue' ? [...rest, ...(this.current ? [this.current] : []), ...skipped] : rest;
+    return skipped.length;
+  }
+
   shuffle(): void {
     for (let i = this.items.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -67,6 +90,10 @@ export class Queue {
       this.items[i] = b;
       this.items[j] = a;
     }
+  }
+
+  private isPosition(position: number): boolean {
+    return Number.isInteger(position) && position >= 1 && position <= this.items.length;
   }
 
   clearUpcoming(): void {

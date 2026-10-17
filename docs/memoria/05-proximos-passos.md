@@ -3,7 +3,7 @@
 ## Leva de funcionalidades (fases aprovadas em 2026-10-17)
 - [x] Fase 1 — Testes e operação
 - [x] Fase 2 — Interface no chat (botões, /search, autocomplete, presença) — falta teste no Discord
-- [ ] Fase 3 — Comandos de fila (/move, /skipto, /clear, histórico, /previous, /replay, /seek)
+- [x] Fase 3 — Comandos de fila (/move, /skipto, /clear, histórico, /previous, /replay, /seek) — falta teste no Discord
 - [ ] Fase 4 — Autoplay
 - [ ] Fase 5 — Qualidade de áudio (loudnorm, pré-carga, SponsorBlock, /filtro)
 - [ ] Fase 6 — Persistência SQLite
@@ -17,9 +17,7 @@
 
 ## Prioridade média
 - [ ] Migrar a paginação do `/queue` para o router global (hoje usa collector de 2 min; funciona, mas é o único que não segue a ADR-030)
-- [ ] `/seek <mm:ss>` (exige reiniciar o pipeline com `--download-sections` ou `-ss` no ffmpeg)
 - [ ] Pré-resolver/pré-aquecer a próxima faixa para reduzir silêncio entre músicas
-- [ ] `/move <de> <para>` na fila
 - [ ] Preservar a fila quando a conexão de voz morre (reconectar o mesmo `GuildPlayer` em vez de destruir) — P-015
 - [ ] Se o 403 (P-011) continuar frequente: PO Token provider (plugin bgutil para yt-dlp) no container
 - [x] Healthcheck do container + exit por gateway fora (Fase 1, 2026-10-17)
@@ -27,4 +25,3 @@
 ## Ideias futuras
 - [ ] Persistir fila em SQLite para sobreviver a restart
 - [ ] Normalização de volume (`loudnorm` no ffmpeg)
-- [ ] Histórico por guild e `/previous`

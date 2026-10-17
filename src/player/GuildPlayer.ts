@@ -13,8 +13,9 @@ import type { Logger } from 'pino';
 import type { Config } from '../config.js';
 import { logger } from '../logger.js';
 import { trackLink } from '../util/format.js';
-import type { YtError } from '../youtube/errors.js';
+import { YtError } from '../youtube/errors.js';
 import type { ActiveStream, Track, YouTubeService } from '../youtube/YouTubeService.js';
+import { History } from './History.js';
 import { Queue, type AdvanceOptions, type LoopMode } from './Queue.js';
 
 const CONNECT_TIMEOUT_MS = 20_000;
@@ -30,6 +31,8 @@ const EARLY_FAILURE_MS = 2_000;
 const MAX_STREAM_RETRIES = 2;
 /** Folga entre a duração do vídeo e o áudio tocado antes de considerar que a faixa terminou cedo. */
 const EARLY_END_TOLERANCE_SEC = 10;
+/** Quanto esperar o primeiro áudio do novo stream num /seek antes de desistir (o antigo segue tocando). */
+const SEEK_TIMEOUT_MS = 30_000;
 
 /**
  * Ganchos para a camada de interface (painel de controles, presença). `trackFinished` sempre vem
@@ -53,12 +56,48 @@ export interface NowPlaying {
   readonly paused: boolean;
 }
 
+export type SeekResult =
+  | { readonly status: 'ok' }
+  /** Nada tocando. */
+  | { readonly status: 'idle' }
+  /** Troca de faixa em andamento (entre o fim de uma e o início da próxima). */
+  | { readonly status: 'busy' }
+  /** A faixa mudou ou outro /seek começou enquanto este esperava o áudio. */
+  | { readonly status: 'superseded' }
+  | { readonly status: 'failed'; readonly error: YtError };
+
+/** Espera o novo stream ter áudio pronto, falhar ou estourar o prazo. */
+export function waitForAudio(stream: ActiveStream, timeoutMs: number): Promise<'ready' | 'timeout' | YtError> {
+  const playStream = stream.resource.playStream;
+  return new Promise((resolve) => {
+    const finish = (outcome: 'ready' | 'timeout' | YtError): void => {
+      clearTimeout(timer);
+      playStream.off('readable', onReadable);
+      resolve(outcome);
+    };
+    // 'readable' também dispara no fim do stream: sem dados = o pipeline acabou sem áudio (ex.: vídeo indisponível).
+    const onReadable = (): void => {
+      if (playStream.readableLength > 0) {
+        finish('ready');
+        return;
+      }
+      void stream.failure(FAILURE_GRACE_MS).then((error) => finish(error ?? new YtError('unknown', 'o stream terminou sem áudio')));
+    };
+    const timer = setTimeout(() => finish('timeout'), timeoutMs);
+    playStream.once('readable', onReadable);
+    void stream.failure(timeoutMs).then((error) => {
+      if (error) finish(error);
+    });
+  });
+}
+
 export class VoiceConnectError extends Error {
   override readonly name = 'VoiceConnectError';
 }
 
 export class GuildPlayer {
   readonly queue = new Queue();
+  readonly history: History;
   private readonly audioPlayer: AudioPlayer;
   private readonly log: Logger;
   private active: ActiveStream | null = null;
@@ -77,6 +116,11 @@ export class GuildPlayer {
   private retries = 0;
   /** Faixa para a qual `trackStarted` foi emitido e `trackFinished` ainda não. */
   private startedTrack: Track | null = null;
+  /** Posição (s) em que o stream atual começou; > 0 depois de um /seek. */
+  private startOffsetSec = 0;
+  private seekGeneration = 0;
+  /** /previous: a faixa interrompida volta para a fila, não para o histórico. */
+  private skipHistoryOnce = false;
 
   private constructor(
     private readonly guild: Guild,
@@ -87,6 +131,7 @@ export class GuildPlayer {
   ) {
     this.log = logger.child({ guildId: guild.id });
     this.volumePercent = deps.config.defaultVolume;
+    this.history = new History(deps.config.historySize);
     this.audioPlayer = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
     this.connection.subscribe(this.audioPlayer);
 
@@ -209,7 +254,7 @@ export class GuildPlayer {
     if (!track) return null;
     return {
       track,
-      elapsedSec: (this.active?.resource.playbackDuration ?? 0) / 1000,
+      elapsedSec: this.startOffsetSec + (this.active?.resource.playbackDuration ?? 0) / 1000,
       paused: this.audioPlayer.state.status === AudioPlayerStatus.Paused,
     };
   }
@@ -219,6 +264,83 @@ export class GuildPlayer {
     if (!current) return null;
     this.stopCurrent({ skip: true, drop: false });
     return current;
+  }
+
+  /** Pula direto para a posição `position` da fila (1-based), como /skip repetido. */
+  skipTo(position: number): { readonly track: Track; readonly skipped: number } | 'busy' | null {
+    if (!this.queue.current) return null;
+    if (this.isChangingTrack()) return 'busy';
+    const target = this.queue.upcoming[position - 1];
+    const skipped = this.queue.prepareSkipTo(position);
+    if (!target || skipped === null) return null;
+    // drop: prepareSkipTo já reposicionou a atual no loop de fila.
+    this.stopCurrent({ skip: true, drop: true });
+    return { track: target, skipped };
+  }
+
+  /**
+   * Volta para a última faixa do histórico; a atual vai para o início da fila (dá para avançar de
+   * novo). Sem nada tocando, só toca a anterior. `null` = histórico vazio.
+   */
+  previous(): Track | 'busy' | null {
+    const current = this.queue.current;
+    if (current && this.isChangingTrack()) return 'busy';
+    const previous = this.history.pop();
+    if (!previous) return null;
+    if (!current) {
+      this.enqueue([previous]);
+      return previous;
+    }
+    this.queue.addFront([previous, current]);
+    this.skipHistoryOnce = true;
+    this.stopCurrent({ skip: true, drop: true });
+    return previous;
+  }
+
+  /**
+   * Recomeça a faixa atual em `positionSec`. O stream novo só substitui o antigo quando tem áudio
+   * pronto: até lá (ou se falhar) a música continua de onde estava. Despausa.
+   */
+  async seek(positionSec: number): Promise<SeekResult> {
+    const track = this.queue.current;
+    const before = this.active;
+    if (!track || !before) return { status: 'idle' };
+    if (this.isChangingTrack()) return { status: 'busy' };
+
+    const generation = ++this.seekGeneration;
+    // Mesmas novas tentativas silenciosas da reprodução normal (ex.: 403 intermitente, P-011).
+    for (let attempt = 1; ; attempt++) {
+      const stream = this.deps.youtube.createStream(track, positionSec);
+      stream.resource.volume?.setVolumeLogarithmic(this.volumePercent / 100);
+      const outcome = await waitForAudio(stream, SEEK_TIMEOUT_MS);
+
+      if (this.destroyed || generation !== this.seekGeneration || this.active !== before) {
+        stream.kill();
+        return { status: 'superseded' };
+      }
+      if (outcome === 'ready' && !stream.resource.ended) {
+        this.swapStream(track, stream, before, positionSec);
+        return { status: 'ok' };
+      }
+      stream.kill();
+      const error = outcome instanceof YtError ? outcome : new YtError('timeout', 'o YouTube demorou demais para responder');
+      if (error.retriable && attempt <= MAX_STREAM_RETRIES) {
+        this.log.warn({ trackId: track.id, positionSec, ytCode: error.code, retry: attempt }, 'seek stream failed, retrying');
+        continue;
+      }
+      this.log.warn({ trackId: track.id, positionSec, ytCode: error.code }, 'seek failed');
+      return { status: 'failed', error };
+    }
+  }
+
+  private swapStream(track: Track, stream: ActiveStream, before: ActiveStream, positionSec: number): void {
+    // play() com outro recurso vai direto para Buffering/Playing (sem Idle), então onTrackEnd não dispara.
+    this.active = stream;
+    this.startOffsetSec = positionSec;
+    this.retries = 0;
+    this.audioPlayer.play(stream.resource);
+    before.kill();
+    this.log.info({ trackId: track.id, positionSec }, 'track seeked');
   }
 
   stop(): void {
@@ -281,6 +403,11 @@ export class GuildPlayer {
     this.log.info({ reason }, 'guild player destroyed');
   }
 
+  /** Entre o fim de uma faixa e o início da próxima (onTrackEnd pode estar esperando o yt-dlp sair). */
+  private isChangingTrack(): boolean {
+    return this.queue.current !== null && this.audioPlayer.state.status === AudioPlayerStatus.Idle;
+  }
+
   private stopCurrent(advance: AdvanceOptions): void {
     // Já em Idle = onTrackEnd está em andamento; um pendingAdvance agora vazaria para a próxima faixa.
     if (this.audioPlayer.state.status === AudioPlayerStatus.Idle) return;
@@ -300,6 +427,7 @@ export class GuildPlayer {
     }
     this.clearTimer('idle');
     this.retries = 0;
+    this.startOffsetSec = 0;
     this.startStream(track);
     const quiet = this.quietNextStart;
     this.quietNextStart = false;
@@ -324,7 +452,7 @@ export class GuildPlayer {
   }
 
   private startStream(track: Track): void {
-    const stream = this.deps.youtube.createStream(track);
+    const stream = this.deps.youtube.createStream(track, this.startOffsetSec);
     stream.resource.volume?.setVolumeLogarithmic(this.volumePercent / 100);
     this.active = stream;
     this.audioPlayer.play(stream.resource);
@@ -335,8 +463,10 @@ export class GuildPlayer {
     const stream = this.active;
     const track = this.queue.current;
     const requested = this.pendingAdvance;
+    const keepOutOfHistory = this.skipHistoryOnce;
     this.active = null;
     this.pendingAdvance = null;
+    this.skipHistoryOnce = false;
 
     let failure: YtError | null = null;
     if (stream) {
@@ -346,13 +476,15 @@ export class GuildPlayer {
     if (this.destroyed) return;
 
     if (stream && track) {
-      const playedSec = Math.round(stream.resource.playbackDuration / 1000);
+      const playedSec = Math.round(this.startOffsetSec + stream.resource.playbackDuration / 1000);
       const endedBy = requested ? (requested.drop ? 'stop' : 'skip') : failure ? `failure:${failure.code}` : 'natural';
       this.log.info({ trackId: track.id, playedSec, durationSec: track.durationSec, endedBy }, 'track ended');
       // Fim "natural" bem antes da duração conhecida: corte silencioso do stream; loga o estado dos processos.
       if (endedBy === 'natural' && track.durationSec !== null && playedSec < track.durationSec - EARLY_END_TOLERANCE_SEC) {
         this.log.warn({ trackId: track.id, playedSec, durationSec: track.durationSec, pipeline: stream.diagnostics() }, 'track ended early');
       }
+      // Só entra no histórico o que chegou a tocar (falha antes do áudio não conta).
+      if (stream.resource.playbackDuration > 0 && !keepOutOfHistory) this.history.push(track);
     }
 
     if (failure && track) {

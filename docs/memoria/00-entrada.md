@@ -3,7 +3,7 @@
 **O que é:** bot de música para Discord, uso privado (um servidor de amigos). Toca **apenas YouTube** via yt-dlp → ffmpeg → @discordjs/voice. Node 24 + TypeScript strict, discord.js v14, slash commands, fila em memória por guild, Docker.
 
 ## Estado atual (2026-10-17)
-- Versão 0.1.0 + /playnow + /search (14 comandos). Fases 1 (testes, healthcheck, shutdown) e 2 (botões, /search, autocomplete, presença) da nova leva concluídas. Implementado: fila por guild, pipeline yt-dlp → ffmpeg com kill limpo, Docker.
+- 20 comandos. Fases 1 (testes, healthcheck, shutdown), 2 (botões, /search, autocomplete, presença) e 3 (/move, /skipto, /clear, /previous, /replay, /seek, histórico) da nova leva concluídas. Implementado: fila por guild, pipeline yt-dlp → ffmpeg com kill limpo, Docker.
 - Verificado: typecheck strict, resolução/streaming no host e no container (podman), sem processos ou /tmp vazando.
 - Testado em servidor real: voz e /play funcionam. 403 intermitente do YouTube tratado com retry (P-011). Demais comandos ainda sem teste completo (ver 05).
 - Como rodar: `README.md` (seções 1–3). Problemas conhecidos: 04.

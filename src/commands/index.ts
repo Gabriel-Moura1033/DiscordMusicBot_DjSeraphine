@@ -1,19 +1,25 @@
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { logger } from '../logger.js';
 import { runGuarded } from './guards.js';
+import clear from './clear.js';
 import leave from './leave.js';
 import loop from './loop.js';
 import nowplaying from './nowplaying.js';
+import move from './move.js';
 import pause from './pause.js';
 import play from './play.js';
 import playnow from './playnow.js';
+import previous from './previous.js';
 import queue from './queue.js';
 import remove from './remove.js';
+import replay from './replay.js';
 import search from './search.js';
+import seek from './seek.js';
 import { deny, replyUnexpectedError } from './reply.js';
 import resume from './resume.js';
 import shuffle from './shuffle.js';
 import skip from './skip.js';
+import skipto from './skipto.js';
 import stop from './stop.js';
 import type { Command, Services } from './types.js';
 import volume from './volume.js';
@@ -23,12 +29,18 @@ export const commands: readonly Command[] = [
   playnow,
   search,
   skip,
+  skipto,
+  previous,
+  replay,
+  seek,
   stop,
   pause,
   resume,
   queue,
   nowplaying,
   remove,
+  move,
+  clear,
   shuffle,
   loop,
   volume,

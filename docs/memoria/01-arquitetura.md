@@ -31,6 +31,11 @@
 - /search: `youtube.search(q, 5)` → embed + select → `SearchSessions` (60 s; expira editando pelo canal). Escolha: dono? → `checkJoin` → consome a sessão → `deferUpdate` → `executePlay` (re-resolve o vídeo) e a mensagem da busca vira a resposta.
 - Autocomplete: `SuggestionProvider` (≥ 3 letras, sem links, debounce 350 ms/usuário, cache LRU 200 com TTL, dedupe, ≤ 2 buscas, espera 2 s; a busca continua até 15 s para encher o cache).
 
+## Comandos de fila (Fase 3)
+- `/skipto n`: `Queue.prepareSkipTo(n)` + `stopCurrent({ skip: true, drop: true })`. `/previous`: `history.pop()` → `addFront([anterior, atual])` + `stopCurrent({ skip, drop })`; `skipHistoryOnce` impede a atual de entrar no histórico. `/clear`: `queue.clearUpcoming()`.
+- Histórico: `onTrackEnd` faz `history.push(track)` se houve áudio (`playbackDuration > 0`).
+- `/seek t` e `/replay` (= seek 0): `GuildPlayer.seek()` abre novo pipeline com `ffmpeg -ss t` (antes do `-i pipe:0`), espera `waitForAudio` (dados no `playStream`; `readable` sem dados = fim/falha), até 2 novas tentativas em falha retentável, e só então `audioPlayer.play(novo)` + `kill()` do antigo. Trocar recurso com o player ativo não passa por Idle, então a fila não avança. Se a faixa mudar no meio (`active !== before` ou nova geração), o stream novo é descartado.
+
 ## Estado por guild (`GuildPlayer`)
 - `connection: VoiceConnection`, `audioPlayer: AudioPlayer`
 - `queue: Queue` (current, upcoming, loopMode)

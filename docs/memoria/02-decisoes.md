@@ -184,3 +184,22 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Data:** 2026-10-17
 - **Decisão:** a resposta do /search é pública (todos veem o que foi pedido); só o autor escolhe (`userId` no `customId` + dono na sessão). Escolher re-resolve o vídeo (valida disponibilidade como o /play) e a mensagem da busca vira a resposta do /play. Expiração edita a mensagem pelo canal, desativando o menu. Exige estar no canal de voz já na busca.
 - **Descartado:** resposta efêmera: não poderia ser editada pelo canal (ADR-030) e esconderia o pedido dos outros.
+
+## ADR-035 — /seek cortando no ffmpeg (não no yt-dlp)
+- **Data:** 2026-10-17
+- **Decisão:** o /seek reabre o pipeline normal com `-ss T` como opção de entrada do ffmpeg (antes de `-i pipe:0`): o yt-dlp baixa desde o início pelo downloader nativo (rápido) e o ffmpeg decodifica e descarta até T. O stream novo só substitui o antigo quando tem áudio, então a música não para enquanto espera.
+- **Medido no container (2026-10-17):** precisão ±8 ms (correlação do PCM = 1,000). Latência até o 1º áudio: ~2,5–2,8 s em músicas; 2,8–4,4 s num vídeo de 3,6 h (até 7000 s); 7,4 s perto do fim de outro vídeo de 68 min (depende da velocidade do googlevideo).
+- **Descartado:**
+  - `--download-sections "*T-inf"`: o yt-dlp usa ffmpeg com `-c copy`, que corta no início do cluster webm (até ~10 s antes de T); falha com m4a em stdout ("Error initializing output stream").
+  - O mesmo com `--force-keyframes-at-cuts`: exato, mas ~9 s por seek em vídeo longo (recodifica).
+  - `-copyts` + `atrim` no nosso ffmpeg: exato, mas ~12 s em vídeo longo e o mesmo problema com m4a.
+- **Consequência:** a Fase 5 (`/filtro`) reaproveita `seek(posição atual)` para reiniciar com o filtro novo.
+
+## ADR-036 — Semântica de /skipto, /previous e histórico
+- **Data:** 2026-10-17
+- **Decisão:**
+  - `/skipto n` ≡ n × `/skip`: sem loop, as puladas saem; no loop de fila, a atual e as puladas vão para o fim, nessa ordem (teste compara com /skip repetido).
+  - `/previous` tira a faixa do histórico e devolve a atual ao início da fila (dá para avançar de novo); dois /previous voltam duas faixas, em vez de alternar entre duas. Sem nada tocando, toca a última do histórico.
+  - Entra no histórico toda faixa que tocou algum áudio (inclusive puladas), exceto a interrompida pelo /previous. Repetições seguidas (loop de faixa) contam uma vez.
+  - /skipto, /previous e /seek no meio de uma troca de faixa respondem "tente de novo" (evita mexer na fila durante o `onTrackEnd`).
+  - `/seek` despausa (o player troca de recurso).

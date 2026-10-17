@@ -55,16 +55,24 @@ const RESOLVE_TIMEOUT_MS = 30_000;
 const PLAYLIST_TIMEOUT_MS = 90_000;
 const MAX_JSON_BYTES = 32 * 1024 * 1024;
 
-const FFMPEG_ARGS = [
-  '-hide_banner',
-  '-loglevel', 'error',
-  '-i', 'pipe:0',
-  '-vn',
-  '-f', 's16le',
-  '-ar', '48000',
-  '-ac', '2',
-  'pipe:1',
-] as const;
+/**
+ * `-ss` antes do `-i` num pipe: o ffmpeg decodifica e descarta até o ponto (exato). Medido mais
+ * rápido e confiável que `--download-sections` do yt-dlp, que corta só em início de cluster e
+ * falha com m4a em stdout (ADR-035).
+ */
+function ffmpegArgs(startSec: number): string[] {
+  return [
+    '-hide_banner',
+    '-loglevel', 'error',
+    ...(startSec > 0 ? ['-ss', String(startSec)] : []),
+    '-i', 'pipe:0',
+    '-vn',
+    '-f', 's16le',
+    '-ar', '48000',
+    '-ac', '2',
+    'pipe:1',
+  ];
+}
 
 function isLive(entry: JsonRecord): boolean {
   const status = getString(entry, 'live_status');
@@ -107,7 +115,8 @@ export class YouTubeService {
     }
   }
 
-  createStream(track: Track): ActiveStream {
+  /** `startSec` > 0 começa a faixa nesse ponto (/seek). */
+  createStream(track: Track, startSec = 0): ActiveStream {
     const pipeline = spawnPipeline(
       {
         command: this.config.ytdlpPath,
@@ -121,7 +130,7 @@ export class YouTubeService {
           track.url,
         ],
       },
-      { command: this.config.ffmpegPath, args: FFMPEG_ARGS },
+      { command: this.config.ffmpegPath, args: ffmpegArgs(startSec) },
     );
 
     const resource = createAudioResource(pipeline.output, {

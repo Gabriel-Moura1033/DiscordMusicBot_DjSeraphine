@@ -85,3 +85,10 @@ Diário cronológico, mais recente por último.
 - Testes: 157 (+54): `customId`, ciclo do loop, `controlRow`, `ControlPanels` com canal falso, `PresenceTracker` com timers falsos, `SuggestionProvider` (debounce, cache/TTL, dedupe, timeout, concorrência, falhas), `SearchSessions`, `suggestionFor`. O setup agora também troca o logger por um mudo (o real carrega a config). Um teste achou bug: throw síncrono da busca escapava e vazava o contador de concorrência.
 - Validado: imagem gerada com testes; deploy com 14 comandos (1ª tentativa deu timeout de rede momentâneo); `healthy`; `top` só init + node; `ytsearch5` flat em ~1,5 s no container.
 - Pendente: teste no Discord (cliques, permissões, expiração do menu, presença).
+
+## 2026-10-17 — Fase 3: comandos de fila
+- `/move`, `/skipto`, `/clear`, `/previous`, `/replay`, `/seek` (20 comandos). `Queue.move/prepareSkipTo`, `History` (`HISTORY_SIZE`), `util/time.ts` (`parseTimestamp`), `GuildPlayer.skipTo/previous/seek` + `startOffsetSec`, `YouTubeService.createStream(track, startSec)`.
+- Seek: comparadas 4 abordagens no container (ADR-035); escolhida `ffmpeg -ss` no pipe (exata, 2–7 s, qualquer formato).
+- Testes: 205 (+48). Destaque: /skipto comparado com /skip repetido em 12 combinações (3 loops × 4 posições).
+- Teste de integração no container com o código compilado (`createStream` + `waitForAudio` reais): achou P-019 e um 403 no seek sem retry → seek ganhou as mesmas 2 novas tentativas silenciosas. Sem processos nem `_MEI` restantes.
+- Pendente: teste no Discord (seek/replay/previous com áudio real).
