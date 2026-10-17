@@ -1,0 +1,270 @@
+import { createAudioResource, StreamType, type AudioResource } from '@discordjs/voice';
+import type { Config } from '../config.js';
+import { logger } from '../logger.js';
+import { formatDuration } from '../util/format.js';
+import { getNumber, getRecords, getString, parseJsonRecord, type JsonRecord } from '../util/json.js';
+import { isFilterRejection, YtError, ytErrorFromStderr } from './errors.js';
+import { runCapture, spawnPipeline, type PipelineResult } from './process.js';
+import { videoUrl, type ResolvableInput } from './url.js';
+
+export interface TrackInfo {
+  readonly id: string;
+  readonly url: string;
+  readonly title: string;
+  readonly durationSec: number | null;
+  readonly uploader: string | null;
+}
+
+export interface Track extends TrackInfo {
+  readonly requestedBy: { readonly id: string; readonly name: string };
+}
+
+export type ResolveResult =
+  | { readonly kind: 'single'; readonly track: TrackInfo; readonly fromSearch: boolean }
+  | {
+      readonly kind: 'playlist';
+      readonly title: string;
+      readonly url: string;
+      readonly tracks: readonly TrackInfo[];
+      /** Itens ignorados: privados, removidos, ao vivo ou longos demais. */
+      readonly skipped: number;
+      /** A playlist tem mais itens que `MAX_PLAYLIST_SIZE`. */
+      readonly truncated: boolean;
+    };
+
+export interface ActiveStream {
+  readonly resource: AudioResource<Track>;
+  kill(): void;
+  /**
+   * Espera o pipeline terminar (até `timeoutMs`) e diz por que a faixa falhou.
+   * `null` = terminou normalmente, foi morta por nós ou ainda não terminou no prazo.
+   */
+  failure(timeoutMs: number): Promise<YtError | null>;
+}
+
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+const RESOLVE_TIMEOUT_MS = 30_000;
+const PLAYLIST_TIMEOUT_MS = 90_000;
+const MAX_JSON_BYTES = 32 * 1024 * 1024;
+
+const FFMPEG_ARGS = [
+  '-hide_banner',
+  '-loglevel', 'error',
+  '-i', 'pipe:0',
+  '-vn',
+  '-f', 's16le',
+  '-ar', '48000',
+  '-ac', '2',
+  'pipe:1',
+] as const;
+
+function isLive(entry: JsonRecord): boolean {
+  const status = getString(entry, 'live_status');
+  return entry['is_live'] === true || status === 'is_live' || status === 'is_upcoming';
+}
+
+function isUnplayableEntry(entry: JsonRecord): boolean {
+  const title = getString(entry, 'title') ?? '';
+  const availability = getString(entry, 'availability');
+  return (
+    title === '[Private video]' ||
+    title === '[Deleted video]' ||
+    (availability !== null && availability !== 'public' && availability !== 'unlisted')
+  );
+}
+
+function toTrackInfo(entry: JsonRecord): TrackInfo | null {
+  const id = getString(entry, 'id');
+  if (!id || !VIDEO_ID.test(id)) return null;
+  return {
+    id,
+    url: videoUrl(id),
+    title: getString(entry, 'title') ?? id,
+    durationSec: getNumber(entry, 'duration'),
+    uploader: getString(entry, 'uploader') ?? getString(entry, 'channel'),
+  };
+}
+
+export class YouTubeService {
+  constructor(private readonly config: Config) {}
+
+  async resolve(input: ResolvableInput): Promise<ResolveResult> {
+    switch (input.kind) {
+      case 'video':
+        return { kind: 'single', track: await this.resolveVideo(input.url), fromSearch: false };
+      case 'search':
+        return { kind: 'single', track: await this.resolveSearch(input.query), fromSearch: true };
+      case 'playlist':
+        return this.resolvePlaylist(input.url);
+    }
+  }
+
+  createStream(track: Track): ActiveStream {
+    const pipeline = spawnPipeline(
+      {
+        command: this.config.ytdlpPath,
+        args: [
+          '--format', 'bestaudio/best',
+          '--no-playlist',
+          '--no-progress',
+          '--match-filter', `!is_live & duration <= ${this.config.maxTrackDurationSec}`,
+          '--output', '-',
+          '--',
+          track.url,
+        ],
+      },
+      { command: this.config.ffmpegPath, args: FFMPEG_ARGS },
+    );
+
+    const resource = createAudioResource(pipeline.output, {
+      inputType: StreamType.Raw,
+      inlineVolume: true,
+      metadata: track,
+    });
+
+    let settled: YtError | null | undefined;
+    const outcome = pipeline.done.then((result) => {
+      settled = this.interpretPipeline(track, result);
+      return settled;
+    });
+
+    return {
+      resource,
+      kill: pipeline.kill,
+      failure: async (timeoutMs) => {
+        if (settled !== undefined) return settled;
+        let timer: NodeJS.Timeout | undefined;
+        const timeout = new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), timeoutMs);
+        });
+        try {
+          return await Promise.race([outcome, timeout]);
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+    };
+  }
+
+  private interpretPipeline(track: Track, result: PipelineResult): YtError | null {
+    if (result.killed) return null;
+    const { source, decoder } = result;
+    const log = logger.child({ trackId: track.id });
+
+    if (source.spawnError || decoder.spawnError) {
+      log.error({ err: source.spawnError ?? decoder.spawnError }, 'failed to spawn yt-dlp/ffmpeg');
+      return new YtError('unknown', 'yt-dlp ou ffmpeg não foram encontrados no servidor');
+    }
+    if (source.code !== 0) {
+      const error = ytErrorFromStderr(source.stderr);
+      log.warn({ code: source.code, ytCode: error.code, stderr: source.stderr.slice(-2000) }, 'yt-dlp stream failed');
+      return error;
+    }
+    if (isFilterRejection(source.stderr)) {
+      return new YtError(
+        'too_long',
+        `é uma transmissão ao vivo ou passa do limite de ${formatDuration(this.config.maxTrackDurationSec)}`,
+      );
+    }
+    if (decoder.code !== 0) {
+      log.warn({ code: decoder.code, stderr: decoder.stderr.slice(-2000) }, 'ffmpeg failed');
+      return new YtError('unknown', 'falha ao decodificar o áudio');
+    }
+    return null;
+  }
+
+  private async runJson(args: readonly string[], timeoutMs: number): Promise<JsonRecord> {
+    const result = await runCapture(this.config.ytdlpPath, ['--dump-single-json', '--no-warnings', ...args], {
+      timeoutMs,
+      maxStdoutBytes: MAX_JSON_BYTES,
+    });
+
+    if (result.spawnError) {
+      logger.error({ err: result.spawnError }, 'failed to spawn yt-dlp');
+      throw new YtError('unknown', 'o yt-dlp não foi encontrado no servidor');
+    }
+    if (result.timedOut) throw new YtError('timeout');
+    if (result.code !== 0) {
+      const error = ytErrorFromStderr(result.stderr);
+      logger.warn({ args, code: result.code, ytCode: error.code, stderr: result.stderr.slice(-2000) }, 'yt-dlp resolve failed');
+      throw error;
+    }
+
+    const json = parseJsonRecord(result.stdout);
+    if (!json) {
+      logger.error({ args, stdoutHead: result.stdout.slice(0, 500) }, 'yt-dlp returned invalid JSON');
+      throw new YtError('unknown', 'resposta inválida do yt-dlp');
+    }
+    return json;
+  }
+
+  private assertPlayable(entry: JsonRecord, track: TrackInfo): void {
+    if (isLive(entry)) throw new YtError('live');
+    if (track.durationSec !== null && track.durationSec > this.config.maxTrackDurationSec) {
+      throw new YtError(
+        'too_long',
+        `o vídeo tem ${formatDuration(track.durationSec)} e o limite é ${formatDuration(this.config.maxTrackDurationSec)}`,
+      );
+    }
+  }
+
+  private async resolveVideo(url: string): Promise<TrackInfo> {
+    const json = await this.runJson(['--no-playlist', '--skip-download', '--', url], RESOLVE_TIMEOUT_MS);
+    const track = toTrackInfo(json);
+    if (!track) throw new YtError('unknown', 'o yt-dlp não retornou um ID de vídeo válido');
+    this.assertPlayable(json, track);
+    return track;
+  }
+
+  private async resolveSearch(query: string): Promise<TrackInfo> {
+    const json = await this.runJson(['--flat-playlist', '--', `ytsearch1:${query}`], RESOLVE_TIMEOUT_MS);
+    const entry = getRecords(json, 'entries')[0];
+    const track = entry ? toTrackInfo(entry) : null;
+    if (!entry || !track) throw new YtError('not_found', `nenhum resultado para "${query}"`);
+    this.assertPlayable(entry, track);
+    return track;
+  }
+
+  private async resolvePlaylist(url: string): Promise<ResolveResult> {
+    const max = this.config.maxPlaylistSize;
+    // Pede um item a mais só para saber se a playlist foi truncada.
+    const json = await this.runJson(
+      ['--flat-playlist', '--playlist-end', String(max + 1), '--', url],
+      PLAYLIST_TIMEOUT_MS,
+    );
+
+    const entries = getRecords(json, 'entries');
+    const totalCount = getNumber(json, 'playlist_count');
+    const truncated = entries.length > max || (totalCount !== null && totalCount > max);
+
+    const tracks: TrackInfo[] = [];
+    let skipped = 0;
+    for (const entry of entries.slice(0, max)) {
+      const track = toTrackInfo(entry);
+      const tooLong = track?.durationSec != null && track.durationSec > this.config.maxTrackDurationSec;
+      if (!track || isUnplayableEntry(entry) || isLive(entry) || tooLong) {
+        skipped++;
+        continue;
+      }
+      tracks.push(track);
+    }
+
+    if (tracks.length === 0) {
+      throw new YtError('not_found', 'a playlist está vazia ou nenhum vídeo dela pode ser tocado');
+    }
+
+    return {
+      kind: 'playlist',
+      title: getString(json, 'title') ?? 'Playlist',
+      url,
+      tracks,
+      skipped,
+      truncated,
+    };
+  }
+
+  async version(): Promise<string | null> {
+    const result = await runCapture(this.config.ytdlpPath, ['--version'], { timeoutMs: 15_000, maxStdoutBytes: 4096 });
+    return result.code === 0 ? result.stdout.trim() : null;
+  }
+}
