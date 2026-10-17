@@ -1,7 +1,7 @@
 import type { Guild, GuildTextBasedChannel, VoiceBasedChannel, VoiceState } from 'discord.js';
 import type { Config } from '../config.js';
 import type { YouTubeService } from '../youtube/YouTubeService.js';
-import { GuildPlayer } from './GuildPlayer.js';
+import { GuildPlayer, type PlayerEvents } from './GuildPlayer.js';
 
 export class PlayerManager {
   private readonly players = new Map<string, GuildPlayer>();
@@ -11,6 +11,7 @@ export class PlayerManager {
   constructor(
     private readonly config: Config,
     private readonly youtube: YouTubeService,
+    private readonly events: PlayerEvents,
   ) {}
 
   /** Descarta players com conexão morta, para o próximo /play reconectar do zero. */
@@ -38,6 +39,7 @@ export class PlayerManager {
     const promise = GuildPlayer.connect(guild, voiceChannel, textChannel, {
       config: this.config,
       youtube: this.youtube,
+      events: this.events,
       onDestroyed: (guildId) => {
         if (this.players.get(guildId)?.isDestroyed) this.players.delete(guildId);
       },

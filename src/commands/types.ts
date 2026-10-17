@@ -1,27 +1,38 @@
 import type {
+  AutocompleteInteraction,
   ChatInputCommandInteraction,
   GuildTextBasedChannel,
   RESTPostAPIChatInputApplicationCommandsJSONBody,
   VoiceBasedChannel,
 } from 'discord.js';
 import type { Config } from '../config.js';
+import type { ControlPanels } from '../interactions/controls.js';
+import type { SearchSessions } from '../interactions/searchSessions.js';
+import type { SuggestionProvider } from '../interactions/suggestions.js';
 import type { GuildPlayer } from '../player/GuildPlayer.js';
 import type { PlayerManager } from '../player/PlayerManager.js';
-import type { YouTubeService } from '../youtube/YouTubeService.js';
+import type { TrackInfo, YouTubeService } from '../youtube/YouTubeService.js';
 
 export interface Services {
   readonly config: Config;
   readonly youtube: YouTubeService;
   readonly players: PlayerManager;
+  readonly panels: ControlPanels;
+  readonly searches: SearchSessions<TrackInfo>;
+  /** `null` = autocomplete desligado (`AUTOCOMPLETE_ENABLED=false`). */
+  readonly suggestions: SuggestionProvider | null;
 }
 
 export type GuildInteraction = ChatInputCommandInteraction<'cached'>;
 
-export interface JoinContext {
-  readonly interaction: GuildInteraction;
-  readonly services: Services;
+export interface VoiceTarget {
   readonly voiceChannel: VoiceBasedChannel;
   readonly textChannel: GuildTextBasedChannel;
+}
+
+export interface JoinContext extends VoiceTarget {
+  readonly interaction: GuildInteraction;
+  readonly services: Services;
 }
 
 export interface PlayerContext {
@@ -32,6 +43,7 @@ export interface PlayerContext {
 
 interface CommandBase {
   readonly data: { readonly name: string; toJSON(): RESTPostAPIChatInputApplicationCommandsJSONBody };
+  autocomplete?(interaction: AutocompleteInteraction<'cached'>, services: Services): Promise<void>;
 }
 
 /**

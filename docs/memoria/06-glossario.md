@@ -15,6 +15,13 @@
 - **Testes puros** — `test/*.test.ts` com `test/setup.ts` bloqueando `child_process` e `fetch`.
 - **pendingAdvance** — `AdvanceOptions` registrado por /skip, /stop e /playnow antes de parar o player; consumido no próximo Idle.
 - **createPlayCommand(name, description, mode)** — fábrica em `src/commands/play.ts` usada por /play (`append`) e /playnow (`now`).
+- **executePlay / PlayRequest** — `src/commands/playFlow.ts`: resolve, conecta, enfileira e responde; usado por /play, /playnow e pela escolha do /search.
+- **PlayerEvents** — ganchos `trackStarted(player, track, announce)` / `trackFinished(player, track)` do `GuildPlayer`; ouvidos por `ControlPanels` e `PresenceTracker` (ligados em `index.ts`).
+- **Painel** — mensagem com botões de controle da faixa atual. `ControlPanels` guarda até 5 por guild e desabilita ao fim da faixa, editando pelo canal.
+- **customId** — `ctl:<toggle|skip|loop|stop>:<guildId>` (botões) e `srch:<guildId>:<userId>:<nonce>` (menu do /search); formato em `src/interactions/customId.ts`. `queue:` ainda é do collector do /queue.
+- **Router** — `src/interactions/router.ts`: handler global de `interactionCreate` (comandos, autocomplete, botões, menus).
+- **SuggestionProvider** — autocomplete com debounce, cache LRU/TTL, dedupe, limite de concorrência e timeout; nunca lança.
+- **GuildRequester** — o que os guards (`checkJoin`, `checkPlayer`) leem de uma interação; vale para comandos e componentes.
 
 ## Convenções de código
 - TypeScript strict, ESM (`"type": "module"`, imports com `.js`), sem `any`.
@@ -40,5 +47,8 @@
 | `YTDLP_AUTO_UPDATE` | não | `true` | `yt-dlp -U` no entrypoint do container |
 | `HEARTBEAT_FILE` | não | `/tmp/dj-heartbeat` | arquivo do healthcheck; definido vazio = desligado |
 | `GATEWAY_DOWN_EXIT_MINUTES` | não | 5 | gateway fora por mais que isso → exit 1 (0 desliga) |
+| `AUTOCOMPLETE_ENABLED` | não | `true` | sugestões no /play (mudar exige rodar o deploy) |
+| `AUTOCOMPLETE_CACHE_TTL_SECONDS` | não | 600 | TTL do cache de sugestões (10–86400) |
+| `PRESENCE_ENABLED` | não | `true` | status "Ouvindo <título>" |
 | `LOG_LEVEL` | não | `info` | nível do pino |
 | `NODE_ENV` | não | — | `production` desativa pino-pretty |

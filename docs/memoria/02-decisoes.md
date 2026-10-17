@@ -162,8 +162,25 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Data:** 2026-10-17
 - **Decisão:** a resposta do /play que começa a tocar na hora ganha botões; avanços da fila geram embed compacto com botões. Cliques tratados num handler global de `interactionCreate`, com `customId` codificando ação + guildId (sem collectors por mensagem). Botões são desabilitados/atualizados editando a mensagem pelo canal (token do bot), não por `interaction.editReply` (token da interação expira em 15 min).
 - **Contexto:** aprovado pelo usuário ao revisar a ADR-019.
+- **Implementação (2026-10-17):** `ControlPanels` (até 5 mensagens por faixa) e `router.ts`. O aviso automático virou embed com botões (antes texto). O `/nowplaying` é visível a todos, mas os botões exigem o mesmo canal. Clique em painel inativo (faixa acabou, restart) desliga os botões daquela mensagem e explica em efêmero. O `/queue` continua com collector (botões efêmeros de 2 min; migrar não trazia ganho).
 
 ## ADR-031 — SQLite como espelho da fila em memória (Fase 6; substitui "fila só em memória")
 - **Data:** 2026-10-17
 - **Decisão:** fila e estado continuam em memória durante a execução; o SQLite guarda um espelho para sobreviver a restart e à destruição do player (P-015). Ao restaurar, o primeiro /play avisa "fila anterior com N faixas restaurada — use /clear para descartar". No start não reconecta ao canal.
 - **Contexto:** substitui a decisão original de fila apenas em memória (`01-arquitetura.md`); aprovado pelo usuário.
+
+## ADR-032 — Presença com várias guilds
+- **Data:** 2026-10-17
+- **Decisão:** a presença ("Ouvindo <título>") mostra a faixa que **começou mais recentemente** entre as guilds tocando; quando ela para, volta para a próxima mais recente; sem nenhuma, limpa. Pausa não altera. Atualizações agrupadas com intervalo mínimo de 5 s (rate limit do gateway); reaplicada em `ShardReady` (sessão nova começa sem presença). `PRESENCE_ENABLED` desliga.
+- **Descartado:** contagem ("Tocando em N servidores", esconde o título no caso comum de 1 guild); rotação entre guilds (atualizações periódicas sem necessidade).
+
+## ADR-033 — Autocomplete do /play via yt-dlp
+- **Data:** 2026-10-17
+- **Decisão:** sugestões via `ytsearch5` flat (~1,5 s medido no container). Valor da sugestão = URL canônica, então o /play segue o caminho normal de link. Proteções: mínimo de 3 letras, links ignorados, debounce 350 ms por usuário, cache LRU (200) com TTL `AUTOCOMPLETE_CACHE_TTL_SECONDS`, dedupe de buscas iguais, no máximo 2 buscas simultâneas (excedente responde vazio sem enfileirar), espera de 2 s; ao estourar, responde vazio e a busca continua (até 15 s) para encher o cache. Nunca responde erro.
+- **Risco aceito:** mais buscas a partir do IP do bot aumentam a chance de `bot_check` (P-002). `AUTOCOMPLETE_ENABLED=false` desliga (o valor é lido no registro de comandos; mudar exige deploy).
+- **Descartado:** API de sugestões do YouTube (`suggestqueries`): devolve só texto, sem vídeo; e seria outra dependência de rede fora do yt-dlp.
+
+## ADR-034 — /search público com menu de 60 s
+- **Data:** 2026-10-17
+- **Decisão:** a resposta do /search é pública (todos veem o que foi pedido); só o autor escolhe (`userId` no `customId` + dono na sessão). Escolher re-resolve o vídeo (valida disponibilidade como o /play) e a mensagem da busca vira a resposta do /play. Expiração edita a mensagem pelo canal, desativando o menu. Exige estar no canal de voz já na busca.
+- **Descartado:** resposta efêmera: não poderia ser editada pelo canal (ADR-030) e esconderia o pedido dos outros.

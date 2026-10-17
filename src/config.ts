@@ -17,6 +17,9 @@ export interface Config {
   readonly heartbeatFile: string | null;
   /** 0 = nunca sai por gateway desconectado. */
   readonly gatewayDownExitMs: number;
+  readonly autocompleteEnabled: boolean;
+  readonly autocompleteCacheTtlMs: number;
+  readonly presenceEnabled: boolean;
   readonly isProduction: boolean;
 }
 
@@ -51,6 +54,14 @@ function snowflake(name: string): string {
   return value;
 }
 
+function boolean(name: string, fallback: boolean): boolean {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) return fallback;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  throw new ConfigError(`${name} deve ser "true" ou "false" (recebido: "${raw}")`);
+}
+
 /** Diferente de `optional`: variável definida e vazia significa "desligado". */
 function optionalPath(name: string, fallback: string): string | null {
   const raw = process.env[name];
@@ -82,6 +93,9 @@ function loadConfig(): Config {
     logLevel,
     heartbeatFile: optionalPath('HEARTBEAT_FILE', '/tmp/dj-heartbeat'),
     gatewayDownExitMs: integer('GATEWAY_DOWN_EXIT_MINUTES', 5, 0, 1440) * 60_000,
+    autocompleteEnabled: boolean('AUTOCOMPLETE_ENABLED', true),
+    autocompleteCacheTtlMs: integer('AUTOCOMPLETE_CACHE_TTL_SECONDS', 600, 10, 86_400) * 1000,
+    presenceEnabled: boolean('PRESENCE_ENABLED', true),
     isProduction: process.env['NODE_ENV'] === 'production',
   };
 }

@@ -1,71 +1,10 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
-import { VoiceConnectError, type GuildPlayer } from '../player/GuildPlayer.js';
-import { formatDuration, truncate } from '../util/format.js';
-import { YtError } from '../youtube/errors.js';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
 import { parseInput } from '../youtube/url.js';
-import type { ResolveResult, Track, TrackInfo } from '../youtube/YouTubeService.js';
-import { baseEmbed, thumbnailUrl } from './embeds.js';
-import { capitalize, deny } from './reply.js';
-import type { Command, JoinContext } from './types.js';
-
-type PlayMode = 'append' | 'now';
-
-function positionLabel(position: number): string {
-  return position === 0 ? '▶️ Tocando agora' : `#${position}`;
-}
-
-function singleEmbed(track: TrackInfo, position: number, query: string | null, header: string | null) {
-  const embed = baseEmbed()
-    .setAuthor({ name: header ?? (query !== null ? '🔎 Resultado da busca' : '➕ Adicionado à fila') })
-    .setTitle(truncate(track.title, 256))
-    .setURL(track.url)
-    .setThumbnail(thumbnailUrl(track))
-    .addFields(
-      { name: 'Duração', value: formatDuration(track.durationSec), inline: true },
-      { name: 'Canal', value: truncate(track.uploader ?? 'desconhecido', 100), inline: true },
-      { name: 'Posição', value: positionLabel(position), inline: true },
-    );
-  // Mostra o link cru também, para conferir se a busca acertou.
-  if (query !== null) embed.setDescription(`Busca: \`${truncate(query, 100)}\`\n${track.url}`);
-  return embed;
-}
-
-function playlistEmbed(
-  result: Extract<ResolveResult, { kind: 'playlist' }>,
-  position: number,
-  maxSize: number,
-  header: string | null,
-) {
-  const notes: string[] = [`**${result.tracks.length}** faixas adicionadas.`];
-  if (result.skipped > 0) notes.push(`${result.skipped} ignoradas (privadas, removidas, ao vivo ou longas demais).`);
-  if (result.truncated) notes.push(`A playlist foi limitada às primeiras ${maxSize} faixas.`);
-  return baseEmbed()
-    .setAuthor({ name: header ?? '📃 Playlist adicionada' })
-    .setTitle(truncate(result.title, 256))
-    .setURL(result.url)
-    .setDescription(notes.join('\n'))
-    .addFields({ name: 'Posição', value: positionLabel(position), inline: true });
-}
-
-async function connect(ctx: JoinContext): Promise<GuildPlayer | null> {
-  const { interaction, services, voiceChannel, textChannel } = ctx;
-  try {
-    const player = await services.players.getOrCreate(interaction.guild, voiceChannel, textChannel);
-    // Outro /play pode ter conectado o bot em outro canal enquanto o yt-dlp resolvia.
-    if (player.voiceChannelId !== voiceChannel.id) {
-      await interaction.editReply(`Já estou tocando em <#${player.voiceChannelId ?? ''}>. Entre lá para pedir músicas.`);
-      return null;
-    }
-    player.textChannel = textChannel;
-    return player;
-  } catch (error) {
-    if (error instanceof VoiceConnectError) {
-      await interaction.editReply(`❌ ${error.message}`);
-      return null;
-    }
-    throw error;
-  }
-}
+import { executePlay, type PlayMode } from './playFlow.js';
+import { deny } from './reply.js';
+import type { Command } from './types.js';
 
 /** `/play` e `/playnow` compartilham validação, busca e conexão; só muda onde as faixas entram. */
 export function createPlayCommand(name: string, description: string, mode: PlayMode): Command {
@@ -80,8 +19,21 @@ export function createPlayCommand(name: string, description: string, mode: PlayM
           .setName('musica')
           .setDescription('Link do YouTube (vídeo, shorts ou playlist) ou nome da música')
           .setRequired(true)
-          .setMaxLength(500),
+          .setMaxLength(500)
+          // Lido no registro: mudar AUTOCOMPLETE_ENABLED exige rodar o deploy de novo.
+          .setAutocomplete(config.autocompleteEnabled),
       ),
+
+    async autocomplete(interaction, services) {
+      const focused = interaction.options.getFocused();
+      const suggestions = services.suggestions ? await services.suggestions.suggest(interaction.user.id, focused) : [];
+      try {
+        await interaction.respond(suggestions.map(({ name: choice, value }) => ({ name: choice, value })));
+      } catch (error) {
+        // Requisição superada ou expirada (3 s): o Discord já não espera resposta.
+        logger.debug({ err: error }, 'autocomplete response failed');
+      }
+    },
 
     async execute(ctx) {
       const { interaction, services } = ctx;
@@ -92,42 +44,14 @@ export function createPlayCommand(name: string, description: string, mode: PlayM
       }
 
       await interaction.deferReply();
-
-      let result: ResolveResult;
-      try {
-        result = await services.youtube.resolve(parsed);
-      } catch (error) {
-        if (error instanceof YtError) {
-          await interaction.editReply(`❌ ${capitalize(error.userMessage)}.`);
-          return;
-        }
-        throw error;
-      }
-
-      const player = await connect(ctx);
-      if (!player) return;
-
-      const requestedBy = { id: interaction.user.id, name: interaction.member.displayName };
-      const withRequester = (info: TrackInfo): Track => ({ ...info, requestedBy });
-
-      const tracks = result.kind === 'single' ? [withRequester(result.track)] : result.tracks.map(withRequester);
-      let position: number;
-      let header: string | null = null;
-      if (mode === 'now') {
-        const interrupted = player.playNow(tracks);
-        position = 0;
-        if (interrupted) header = `⏭️ Pulei "${truncate(interrupted.title, 60)}" — tocando agora`;
-      } else {
-        position = player.enqueue(tracks);
-      }
-
-      if (result.kind === 'single') {
-        const query = parsed.kind === 'search' ? parsed.query : null;
-        await interaction.editReply({ embeds: [singleEmbed(result.track, position, query, header)] });
-        return;
-      }
-      await interaction.editReply({
-        embeds: [playlistEmbed(result, position, services.config.maxPlaylistSize, header)],
+      await executePlay({
+        services,
+        guild: interaction.guild,
+        member: interaction.member,
+        target: ctx,
+        input: parsed,
+        mode,
+        respond: (options) => interaction.editReply(options),
       });
     },
   };

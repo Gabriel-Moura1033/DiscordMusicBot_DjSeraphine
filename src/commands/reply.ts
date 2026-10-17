@@ -1,8 +1,8 @@
-import { MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
+import { MessageFlags, type RepliableInteraction } from 'discord.js';
 import { logger } from '../logger.js';
 
 /** Resposta pública, sem preview de links e sem mencionar ninguém. */
-export async function say(interaction: ChatInputCommandInteraction, content: string): Promise<void> {
+export async function say(interaction: RepliableInteraction, content: string): Promise<void> {
   const options = { content, allowedMentions: { parse: [] } } as const;
   if (interaction.deferred || interaction.replied) {
     await interaction.editReply({ ...options, flags: MessageFlags.SuppressEmbeds });
@@ -12,7 +12,7 @@ export async function say(interaction: ChatInputCommandInteraction, content: str
 }
 
 /** Resposta efêmera (só quem usou o comando vê). */
-export async function deny(interaction: ChatInputCommandInteraction, content: string): Promise<void> {
+export async function deny(interaction: RepliableInteraction, content: string): Promise<void> {
   const options = { content, allowedMentions: { parse: [] } } as const;
   if (interaction.deferred || interaction.replied) {
     await interaction.followUp({ ...options, flags: MessageFlags.Ephemeral });
@@ -21,7 +21,7 @@ export async function deny(interaction: ChatInputCommandInteraction, content: st
   await interaction.reply({ ...options, flags: MessageFlags.Ephemeral });
 }
 
-export async function replyUnexpectedError(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function replyUnexpectedError(interaction: RepliableInteraction): Promise<void> {
   const content = '❌ Ocorreu um erro inesperado. Tente de novo em instantes.';
   try {
     if (interaction.deferred && !interaction.replied) await interaction.editReply({ content });

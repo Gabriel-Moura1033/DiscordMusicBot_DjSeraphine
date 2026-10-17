@@ -9,6 +9,7 @@ import play from './play.js';
 import playnow from './playnow.js';
 import queue from './queue.js';
 import remove from './remove.js';
+import search from './search.js';
 import { deny, replyUnexpectedError } from './reply.js';
 import resume from './resume.js';
 import shuffle from './shuffle.js';
@@ -20,6 +21,7 @@ import volume from './volume.js';
 export const commands: readonly Command[] = [
   play,
   playnow,
+  search,
   skip,
   stop,
   pause,
@@ -34,6 +36,10 @@ export const commands: readonly Command[] = [
 ];
 
 const byName = new Map(commands.map((command) => [command.data.name, command]));
+
+export function commandByName(name: string): Command | undefined {
+  return byName.get(name);
+}
 
 export async function handleCommand(interaction: ChatInputCommandInteraction, services: Services): Promise<void> {
   const command = byName.get(interaction.commandName);

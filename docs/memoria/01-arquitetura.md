@@ -3,11 +3,12 @@
 ## Camadas
 | Camada | Pasta | Responsabilidade |
 |---|---|---|
-| Entrada | `src/index.ts` | Cria o `Client`, roteia `interactionCreate`, aplica guards, repassa `voiceStateUpdate` ao `PlayerManager` |
+| Entrada | `src/index.ts` | Cria o `Client` e os serviços, liga `PlayerEvents` (painéis + presença), repassa `voiceStateUpdate` ao `PlayerManager` |
+| Interações | `src/interactions/` | `router.ts` (handler global de `interactionCreate`), botões de controle, menu do /search, autocomplete, formato de `customId` |
 | Comandos | `src/commands/` | Um arquivo por slash command (`Command`: `data`, `guard`, `execute`). Só valida entrada e formata resposta |
 | Player | `src/player/` | `PlayerManager` (Map guildId → `GuildPlayer`), `GuildPlayer` (conexão, AudioPlayer, timers), `Queue` (estrutura pura) |
 | YouTube | `src/youtube/` | `url.ts` (classificar/normalizar entrada), `YouTubeService` (metadados + stream), `errors.ts` (stderr → erro tipado), `process.ts` (spawn/kill) |
-| Infra | `src/config.ts`, `src/logger.ts` | Config validada; logger pino |
+| Infra | `src/config.ts`, `src/logger.ts`, `src/health.ts`, `src/presence.ts` | Config validada; logger pino; heartbeat; presença |
 | Registro | `src/deploy-commands.ts` | PUT dos comandos por guild via REST |
 
 ## Fluxo do /play
@@ -22,6 +23,13 @@
    - `AudioPlayer.play(resource)`
 7. `AudioPlayerStatus.Idle` → `kill()` do stream atual → se falhou antes de tocar, avisa o erro mapeado → `playNext()`.
 8. Fila vazia → arma timer de inatividade → `destroy()` (kill + `connection.destroy()` + remove do Map).
+
+## Interface no chat (Fase 2)
+- `interactionCreate` → `routeInteraction`: slash → `handleCommand`; autocomplete → `Command.autocomplete`; botão `ctl:` → `controlButtons.ts`; menu `srch:` → `searchSelect.ts`. Prefixos desconhecidos são ignorados (o `/queue` ainda usa collector).
+- `GuildPlayer.playNext()` emite `trackFinished` (da anterior) e `trackStarted(announce)`; `destroy()` emite `trackFinished`. `ControlPanels` envia o embed "tocando agora" com botões quando `announce`, e desabilita os painéis da faixa ao fim. Respostas do /play (posição 0) e do /nowplaying são anexadas com `attach()`.
+- Clique: `checkPlayer` sem exigir canal → painel ativo? (senão desliga e explica) → `checkPlayer` exigindo o mesmo canal → ação → `interaction.update()` com os botões atualizados; skip/stop também mandam aviso público via `followUp`.
+- /search: `youtube.search(q, 5)` → embed + select → `SearchSessions` (60 s; expira editando pelo canal). Escolha: dono? → `checkJoin` → consome a sessão → `deferUpdate` → `executePlay` (re-resolve o vídeo) e a mensagem da busca vira a resposta.
+- Autocomplete: `SuggestionProvider` (≥ 3 letras, sem links, debounce 350 ms/usuário, cache LRU 200 com TTL, dedupe, ≤ 2 buscas, espera 2 s; a busca continua até 15 s para encher o cache).
 
 ## Estado por guild (`GuildPlayer`)
 - `connection: VoiceConnection`, `audioPlayer: AudioPlayer`

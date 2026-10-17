@@ -78,3 +78,10 @@ Diário cronológico, mais recente por último.
 - `src/health.ts` (heartbeat + exit 1 com gateway fora), shutdown gracioso em `src/index.ts`, `waitForChildren()` em `process.ts`. HEALTHCHECK no Dockerfile e no compose; `stop_grace_period` 15 s. Novas variáveis `HEARTBEAT_FILE`, `GATEWAY_DOWN_EXIT_MINUTES`.
 - Validado: imagem com testes passando; `healthy`; stop → "bye" exit 0; 2 pipelines encerrados em 9 ms sem `/tmp/_MEI*`; rede cortada → exit 1 → podman reinicia; `podman compose top dj` só com init + node.
 - Problemas: P-016, P-017, P-018. ADRs: 028–031 (030/031 antecipam decisões das Fases 2 e 6).
+
+## 2026-10-17 — Fase 2: interface no chat
+- Botões de controle (`src/interactions/controls.ts`, `controlButtons.ts`), handler global `router.ts`, `/search` com menu (`commands/search.ts`, `interactions/searchSelect.ts`, `searchSessions.ts`, `searchMenu.ts`), autocomplete do /play (`suggestions.ts`), presença (`src/presence.ts`). Fluxo do /play extraído para `commands/playFlow.ts`. Guards generalizados (`checkJoin`/`checkPlayer`) para comandos e componentes. `GuildPlayer` emite `PlayerEvents`; o aviso "tocando agora" virou embed com botões. `YouTubeService.search()`.
+- Config: `AUTOCOMPLETE_ENABLED`, `AUTOCOMPLETE_CACHE_TTL_SECONDS`, `PRESENCE_ENABLED`. ADRs 032–034; ADR-030 complementada.
+- Testes: 157 (+54): `customId`, ciclo do loop, `controlRow`, `ControlPanels` com canal falso, `PresenceTracker` com timers falsos, `SuggestionProvider` (debounce, cache/TTL, dedupe, timeout, concorrência, falhas), `SearchSessions`, `suggestionFor`. O setup agora também troca o logger por um mudo (o real carrega a config). Um teste achou bug: throw síncrono da busca escapava e vazava o contador de concorrência.
+- Validado: imagem gerada com testes; deploy com 14 comandos (1ª tentativa deu timeout de rede momentâneo); `healthy`; `top` só init + node; `ytsearch5` flat em ~1,5 s no container.
+- Pendente: teste no Discord (cliques, permissões, expiração do menu, presença).

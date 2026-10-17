@@ -244,6 +244,19 @@ export class YouTubeService {
     return track;
   }
 
+  /** Até `limit` resultados tocáveis (sem lives nem vídeos acima do limite de duração). */
+  async search(query: string, limit: number, timeoutMs = RESOLVE_TIMEOUT_MS): Promise<TrackInfo[]> {
+    const json = await this.runJson(['--flat-playlist', '--', `ytsearch${limit}:${query}`], timeoutMs);
+    const tracks: TrackInfo[] = [];
+    for (const entry of getRecords(json, 'entries')) {
+      const track = toTrackInfo(entry);
+      if (!track || isLive(entry) || isUnplayableEntry(entry)) continue;
+      if (track.durationSec !== null && track.durationSec > this.config.maxTrackDurationSec) continue;
+      tracks.push(track);
+    }
+    return tracks;
+  }
+
   private async resolvePlaylist(url: string): Promise<ResolveResult> {
     const max = this.config.maxPlaylistSize;
     // Pede um item a mais só para saber se a playlist foi truncada.

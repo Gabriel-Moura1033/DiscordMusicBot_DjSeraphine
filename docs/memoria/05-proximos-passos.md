@@ -2,7 +2,7 @@
 
 ## Leva de funcionalidades (fases aprovadas em 2026-10-17)
 - [x] Fase 1 — Testes e operação
-- [ ] Fase 2 — Interface no chat (botões, /search, autocomplete, presença)
+- [x] Fase 2 — Interface no chat (botões, /search, autocomplete, presença) — falta teste no Discord
 - [ ] Fase 3 — Comandos de fila (/move, /skipto, /clear, histórico, /previous, /replay, /seek)
 - [ ] Fase 4 — Autoplay
 - [ ] Fase 5 — Qualidade de áudio (loudnorm, pré-carga, SponsorBlock, /filtro)
@@ -16,6 +16,7 @@
 - [ ] Fixar versões de `DENO_IMAGE_TAG` e da imagem Node no Dockerfile para builds reprodutíveis
 
 ## Prioridade média
+- [ ] Migrar a paginação do `/queue` para o router global (hoje usa collector de 2 min; funciona, mas é o único que não segue a ADR-030)
 - [ ] `/seek <mm:ss>` (exige reiniciar o pipeline com `--download-sections` ou `-ss` no ffmpeg)
 - [ ] Pré-resolver/pré-aquecer a próxima faixa para reduzir silêncio entre músicas
 - [ ] `/move <de> <para>` na fila
@@ -26,5 +27,4 @@
 ## Ideias futuras
 - [ ] Persistir fila em SQLite para sobreviver a restart
 - [ ] Normalização de volume (`loudnorm` no ffmpeg)
-- [ ] Autocomplete do `/play` com resultados de busca
 - [ ] Histórico por guild e `/previous`

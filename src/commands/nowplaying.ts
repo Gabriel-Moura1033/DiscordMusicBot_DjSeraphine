@@ -1,4 +1,5 @@
 import { InteractionContextType, SlashCommandBuilder } from 'discord.js';
+import { playerControlRow } from '../interactions/controls.js';
 import { formatDuration, progressBar, truncate } from '../util/format.js';
 import { baseEmbed, LOOP_LABELS, thumbnailUrl } from './embeds.js';
 import { deny } from './reply.js';
@@ -11,7 +12,7 @@ const command: Command = {
     .setDescription('Mostra a faixa atual e o progresso')
     .setContexts(InteractionContextType.Guild),
 
-  async execute({ interaction, player }) {
+  async execute({ interaction, services, player }) {
     const now = player.nowPlaying();
     if (!now) {
       await deny(interaction, 'Não há nada tocando.');
@@ -34,7 +35,11 @@ const command: Command = {
       );
     if (track.uploader) embed.setFooter({ text: track.uploader });
 
-    await interaction.reply({ embeds: [embed] });
+    const response = await interaction.reply({ embeds: [embed], components: [playerControlRow(player)], withResponse: true });
+    const messageId = response.resource?.message?.id;
+    if (messageId && interaction.channel) {
+      services.panels.attach(player.guildId, track, interaction.channel, messageId, player.loopMode);
+    }
   },
 };
 

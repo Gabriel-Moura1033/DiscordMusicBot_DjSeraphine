@@ -8,11 +8,12 @@ Contexto do projeto, decisões e problemas conhecidos: [`docs/memoria/00-entrada
 
 | Comando | O que faz |
 |---|---|
-| `/play musica:<link ou nome>` | Toca/enfileira um vídeo, uma playlist (até `MAX_PLAYLIST_SIZE`) ou o 1º resultado da busca |
+| `/play musica:<link ou nome>` | Toca/enfileira um vídeo, uma playlist (até `MAX_PLAYLIST_SIZE`) ou o 1º resultado da busca. Ao digitar, sugere títulos (autocomplete) |
 | `/playnow musica:<link ou nome>` | Pula a faixa atual e toca a pedida na hora; o resto da fila continua igual |
+| `/search musica:<nome>` | Mostra os 5 primeiros resultados num menu; quem buscou escolhe em até 60 s |
 | `/skip` `/stop` `/pause` `/resume` | Controle da reprodução (`/stop` limpa a fila mas mantém o bot no canal) |
 | `/queue` | Fila paginada (10 por página) |
-| `/nowplaying` | Faixa atual com barra de progresso |
+| `/nowplaying` | Faixa atual com barra de progresso e botões de controle |
 | `/remove posicao:<n>` `/shuffle` `/loop modo:<desligado\|faixa\|fila>` | Edição da fila |
 | `/volume nivel:<0-100>` | Volume (efeito imediato) |
 | `/leave` | Sai do canal e descarta a fila |
@@ -83,6 +84,12 @@ Os testes são **puros**: um setup global faz `spawn`/`exec` e `fetch` lançarem
 - **Queda do gateway:** se o gateway ficar fora por mais de `GATEWAY_DOWN_EXIT_MINUTES` (padrão 5), o processo encerra com código 1 e o `restart: unless-stopped` sobe outro. A detecção da queda em si leva ~1–2 min (heartbeat do Discord), então o tempo total é o valor configurado + ~2 min.
 - **Shutdown:** `docker compose stop` sai dos canais de voz, encerra yt-dlp/ffmpeg (espera até 5 s), fecha o gateway e sai com 0. Um segundo sinal força a saída.
 
+## Interface no chat
+
+- **Botões** ⏯️ ⏭️ 🔁 ⏹️ aparecem no aviso "tocando agora", na resposta do `/play` que começa a tocar na hora e no `/nowplaying`. Valem as mesmas regras dos comandos: só quem está no canal de voz do bot. 🔁 cicla off → faixa → fila. Quando a faixa termina, os botões daquela mensagem são desativados.
+- **Autocomplete do `/play`:** a partir de 3 letras sugere até 5 vídeos (a sugestão escolhida vira o link). Cada sugestão é uma busca no YouTube; resultados ficam em cache por `AUTOCOMPLETE_CACHE_TTL_SECONDS`. Se a busca demorar, a lista vem vazia e você pode mandar o texto mesmo assim.
+- **Presença:** o bot mostra "Ouvindo <título>". Em mais de um servidor, mostra a faixa que começou por último; pausar não muda.
+
 ## Variáveis de ambiente
 
 Veja [`.env.example`](.env.example). Obrigatórias: `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID`. Valores inválidos fazem o bot recusar a subir com uma mensagem `[config] ...`.
@@ -98,7 +105,9 @@ Veja [`.env.example`](.env.example). Obrigatórias: `DISCORD_TOKEN`, `DISCORD_CL
 | `Sign in to confirm you're not a bot`, `HTTP Error 429` | IP marcado pelo YouTube (comum em VPS/datacenter) ou excesso de requisições | Aguarde algumas horas; rode em IP residencial. O projeto não usa cookies (decisão ADR-014) |
 | `Sign in to confirm your age` | Vídeo com restrição de idade | Sem cookies não há como tocar; o bot pula e avisa |
 | Desafios JS / `No supported JavaScript runtime` | Deno ausente | `docker compose exec dj deno --version`; a imagem já inclui |
-| Busca retorna o vídeo errado | `ytsearch1` pega só o 1º resultado | Use o link direto |
+| Busca retorna o vídeo errado | `ytsearch1` pega só o 1º resultado | Use `/search` para escolher, o autocomplete do `/play`, ou o link direto |
+| Autocomplete não sugere nada | Texto com menos de 3 letras, link, busca lenta (> ~2 s) ou `AUTOCOMPLETE_ENABLED=false` | Digite mais um pouco (a busca segue em segundo plano e a próxima tecla usa o cache) ou envie o texto: o `/play` busca do mesmo jeito |
+| `Sign in to confirm you're not a bot` aparece depois de ativar o autocomplete | Cada tecla pode virar uma busca no YouTube a partir do seu IP | `AUTOCOMPLETE_ENABLED=false` e rode o deploy de comandos de novo |
 
 Para depurar um vídeo manualmente:
 
@@ -117,6 +126,8 @@ docker compose exec dj yt-dlp -v -F "https://www.youtube.com/watch?v=ID"
 | Bot diz que está tocando, mas não está no canal / ficou mudo minutos | Host entrou em suspensão (sleep) e a conexão de voz caiu | Rode em máquina que não suspende, ou bloqueie o sleep enquanto o bot roda: `systemd-inhibit --what=sleep:idle --why="bot de música" sleep infinity` |
 | Slash commands não aparecem | Comandos não registrados, guild errada ou convite sem `applications.commands` | Rode o deploy de novo, confira `DISCORD_GUILD_ID`, reconvide com o link acima e recarregue o Discord (Ctrl+R) |
 | "Comando desconhecido" | Registro desatualizado | Rode o deploy de comandos de novo |
+| Botões desativados / "Esses controles são de uma faixa que já terminou" | A faixa da mensagem acabou ou o bot reiniciou | Use os botões da mensagem mais recente ou `/nowplaying` |
+| "⌛ Essa busca expirou" | O menu do `/search` vale 60 s | Faça a busca de novo |
 | Áudio picotando | CPU do host saturada | Verifique `docker stats`; a codificação Opus roda no processo Node |
 
 ### Container e operação

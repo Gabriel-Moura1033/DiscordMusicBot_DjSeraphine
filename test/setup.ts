@@ -13,3 +13,10 @@ vi.mock('node:child_process', () => ({
 }));
 
 vi.stubGlobal('fetch', () => forbidden('fetch'));
+
+// O logger real carrega a config (que exige DISCORD_TOKEN etc. e encerra o processo sem eles).
+vi.mock('../src/logger.js', () => {
+  const noop = (): void => undefined;
+  const silent = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => silent };
+  return { logger: silent };
+});

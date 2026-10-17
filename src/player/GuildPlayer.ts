@@ -12,7 +12,7 @@ import { MessageFlags, type Guild, type GuildTextBasedChannel, type VoiceBasedCh
 import type { Logger } from 'pino';
 import type { Config } from '../config.js';
 import { logger } from '../logger.js';
-import { formatDuration, trackLink } from '../util/format.js';
+import { trackLink } from '../util/format.js';
 import type { YtError } from '../youtube/errors.js';
 import type { ActiveStream, Track, YouTubeService } from '../youtube/YouTubeService.js';
 import { Queue, type AdvanceOptions, type LoopMode } from './Queue.js';
@@ -31,9 +31,19 @@ const MAX_STREAM_RETRIES = 2;
 /** Folga entre a duração do vídeo e o áudio tocado antes de considerar que a faixa terminou cedo. */
 const EARLY_END_TOLERANCE_SEC = 10;
 
+/**
+ * Ganchos para a camada de interface (painel de controles, presença). `trackFinished` sempre vem
+ * antes do `trackStarted` seguinte, e também no destroy.
+ */
+export interface PlayerEvents {
+  trackStarted?(player: GuildPlayer, track: Track, announce: boolean): void;
+  trackFinished?(player: GuildPlayer, track: Track): void;
+}
+
 export interface GuildPlayerDeps {
   readonly config: Config;
   readonly youtube: YouTubeService;
+  readonly events: PlayerEvents;
   readonly onDestroyed: (guildId: string) => void;
 }
 
@@ -65,6 +75,8 @@ export class GuildPlayer {
   /** Momento em que a conexão saiu de Ready (`null` = está Ready). */
   private notReadySince: number | null = null;
   private retries = 0;
+  /** Faixa para a qual `trackStarted` foi emitido e `trackFinished` ainda não. */
+  private startedTrack: Track | null = null;
 
   private constructor(
     private readonly guild: Guild,
@@ -157,6 +169,11 @@ export class GuildPlayer {
 
   get loopMode(): LoopMode {
     return this.queue.loopMode;
+  }
+
+  get isPaused(): boolean {
+    const status = this.audioPlayer.state.status;
+    return status === AudioPlayerStatus.Paused || status === AudioPlayerStatus.AutoPaused;
   }
 
   /** Retorna a posição na fila do primeiro item adicionado (0 = começou a tocar agora). */
@@ -254,6 +271,7 @@ export class GuildPlayer {
     this.clearTimer('alone');
     if (this.readyWatchdog) clearTimeout(this.readyWatchdog);
     this.readyWatchdog = null;
+    this.finishTrack();
     this.queue.reset();
     this.active?.kill();
     this.active = null;
@@ -274,6 +292,7 @@ export class GuildPlayer {
 
   private playNext(advance: AdvanceOptions, announce = true): void {
     if (this.destroyed) return;
+    this.finishTrack();
     const track = this.queue.advance(advance);
     if (!track) {
       this.armIdleTimer();
@@ -284,10 +303,24 @@ export class GuildPlayer {
     this.startStream(track);
     const quiet = this.quietNextStart;
     this.quietNextStart = false;
-    if (!announce || quiet) return;
-    void this.notify(
-      `🎶 Tocando agora: ${trackLink(track)} \`${formatDuration(track.durationSec)}\` — pedido por **${track.requestedBy.name}**`,
-    );
+    this.startedTrack = track;
+    this.emit('trackStarted', (events) => events.trackStarted?.(this, track, announce && !quiet));
+  }
+
+  private finishTrack(): void {
+    const track = this.startedTrack;
+    if (!track) return;
+    this.startedTrack = null;
+    this.emit('trackFinished', (events) => events.trackFinished?.(this, track));
+  }
+
+  /** Falha na interface (ex.: Discord fora) nunca pode derrubar a reprodução. */
+  private emit(name: string, call: (events: PlayerEvents) => void): void {
+    try {
+      call(this.deps.events);
+    } catch (error) {
+      this.log.warn({ err: error, event: name }, 'player event listener failed');
+    }
   }
 
   private startStream(track: Track): void {
