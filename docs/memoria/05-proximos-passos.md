@@ -1,9 +1,11 @@
 # 05 — Próximos passos
 
 ## Prioridade alta
-- [ ] Testar ponta a ponta num servidor real (play/skip/stop/leave, playlist, vídeo privado, idade)
-- [ ] Verificar ausência de zumbis após skip em sequência (`ps -ef` no container)
+- [ ] Testar ponta a ponta num servidor real (play/skip/stop/leave, playlist, vídeo privado, idade, timer de inatividade, /queue paginado)
+- [ ] Confirmar que a voz funciona com DAVE (áudio audível) e registrar em 04 se houver quirk
+- [x] Verificar ausência de zumbis após kills em sequência (feito em script no container, 2026-10-17); repetir com o bot real via `docker compose top dj`
 - [ ] Testes unitários de `url.ts`, `Queue.ts` e `errors.ts` (node:test, sem dependência extra)
+- [ ] Fixar versões de `DENO_IMAGE_TAG` e da imagem Node no Dockerfile para builds reprodutíveis
 
 ## Prioridade média
 - [ ] `/seek <mm:ss>` (exige reiniciar o pipeline com `--download-sections` ou `-ss` no ffmpeg)

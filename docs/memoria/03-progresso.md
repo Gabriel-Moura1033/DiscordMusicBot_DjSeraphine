@@ -30,3 +30,9 @@ Diário cronológico, mais recente por último.
 - `Dockerfile` (multi-stage: deps com toolchain p/ @discordjs/opus, build TS, runtime node:24-bookworm-slim + ffmpeg + deno + yt-dlp_linux), `docker-entrypoint.sh`, `docker-compose.yml` (init, tmpfs /tmp, logs rotacionados), `.dockerignore`, `.env.example`.
 - Testado com podman 6.1: opus nativo carrega; busca no container ~1,5 s; 3 kills seguidos + faixa completa sem processos restantes e `/tmp` vazio; update sem rede gera aviso e o bot sobe.
 - Corrigidos P-009 e P-010 (ver 04).
+
+## 2026-10-17 — Documentação
+- `README.md`: Developer Portal, intents, permissões (3165184), link de convite, Docker/Podman, dev local, troubleshooting de yt-dlp, voz e processos.
+- `podman compose config` valida o compose.
+- Salas 00 e 05 atualizadas com o estado da v0.1.0.
+- Pendente: teste em servidor real (ver 05).

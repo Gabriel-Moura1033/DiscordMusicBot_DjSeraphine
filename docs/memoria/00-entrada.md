@@ -3,8 +3,10 @@
 **O que é:** bot de música para Discord, uso privado (um servidor de amigos). Toca **apenas YouTube** via yt-dlp → ffmpeg → @discordjs/voice. Node 24 + TypeScript strict, discord.js v14, slash commands, fila em memória por guild, Docker.
 
 ## Estado atual (2026-10-17)
-- Arquitetura aprovada; repositório git criado com memória inicial.
-- Código em implementação.
+- Versão 0.1.0 implementada: 12 slash commands, fila por guild, pipeline yt-dlp → ffmpeg com kill limpo, Docker.
+- Verificado: typecheck strict, resolução/streaming no host e no container (podman), sem processos ou /tmp vazando.
+- **Ainda não testado num servidor Discord real** (conexão de voz, DAVE, comandos). É o próximo passo (ver 05).
+- Como rodar: `README.md` (seções 1–3). Problemas conhecidos: 04.
 
 ## Mapa das salas
 | Sala | Leia quando |
@@ -17,6 +19,9 @@
 | [06-glossario](06-glossario.md) | precisar de nomes, convenções ou variáveis de ambiente |
 
 **Ordem sugerida:** este arquivo → 03 (últimas entradas) → 01 → a sala relevante à tarefa.
+
+## Mapa do código
+`src/index.ts` (bootstrap) · `src/commands/` (um arquivo por comando + `guards.ts`) · `src/player/` (`PlayerManager` → `GuildPlayer` → `Queue`) · `src/youtube/` (`url.ts`, `YouTubeService.ts`, `process.ts`, `errors.ts`) · `src/deploy-commands.ts`.
 
 ## Regras de manutenção
 - Ler esta sala e as relevantes antes de propor mudanças.
