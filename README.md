@@ -21,6 +21,8 @@ Contexto do projeto, decisões e problemas conhecidos: [`docs/memoria/00-entrada
 | `/remove posicao:<n>` `/move de:<n> para:<n>` `/shuffle` `/loop modo:<desligado\|faixa\|fila>` | Edição da fila |
 | `/clear` | Limpa a fila sem parar a faixa atual |
 | `/filtro tipo:<nenhum\|bassboost\|nightcore\|8d>` | Efeito de áudio, salvo por servidor; aplica na posição atual (~2–3 s) |
+| `/top escopo:<servidor\|eu> periodo:<7d\|30d\|sempre>` | Mais tocadas (conta faixas ouvidas ≥ 30 s; recomendações do autoplay não entram) |
+| `/playlist salvar\|carregar\|listar\|apagar nome:<nome>` | Suas playlists (valem em qualquer servidor); `salvar` guarda a faixa atual + a fila |
 | `/autoplay` | Liga/desliga: quando a fila acaba, segue com músicas do mix do YouTube da última faixa (aparecem como "Recomendado pela DJ Seraphine") |
 | `/volume nivel:<0-100>` | Volume (efeito imediato) |
 | `/leave` | Sai do canal e descarta a fila |
@@ -60,6 +62,19 @@ docker compose logs -f
 ```
 
 Com Podman, troque `docker compose` por `podman compose`.
+
+### Dados (SQLite)
+
+Fila, configurações por servidor (filtro, loop, autoplay, volume), histórico de reprodução e playlists ficam em `data/dj.sqlite`, no volume `dj-data` (sobrevive a restart, `down` e rebuild). Depois de um restart o bot **não** volta sozinho ao canal: no primeiro `/play`, a música pedida toca e a fila anterior vem em seguida, com o aviso "fila anterior com N faixas restaurada — use /clear para descartar". `/leave` descarta a fila salva.
+
+Backup (com o bot rodando, cópia consistente):
+
+```bash
+docker compose exec dj node -e "new (require('node:sqlite').DatabaseSync)('data/dj.sqlite').exec(\"VACUUM INTO 'data/backup.sqlite'\")"
+docker compose cp dj:/app/data/backup.sqlite ./backup.sqlite
+```
+
+Para começar do zero: `docker compose down -v` (apaga o volume).
 
 A cada start do container o entrypoint roda `yt-dlp --update-to stable`. Se falhar, registra um aviso e sobe com a versão atual. Desligue com `YTDLP_AUTO_UPDATE=false`.
 
@@ -121,6 +136,8 @@ Veja [`.env.example`](.env.example). Obrigatórias: `DISCORD_TOKEN`, `DISCORD_CL
 | Trecho de música foi pulado por engano | Corte do SponsorBlock errado (enviado pela comunidade) | `SPONSORBLOCK_ENABLED=false`, ou corrija o trecho no site do SponsorBlock |
 | `sponsorblock lookup failed` no log | API fora ou lenta (> 1,5 s) | Nada: a faixa toca sem cortes |
 | Barulho/distorção com bass boost | Ganho de grave alto em faixas já com muito grave | `/filtro tipo:nenhum` |
+| `[config]`/`database: ... failed` ou `MigrationError` ao subir | Banco de versão mais nova que o código (downgrade) ou volume sem permissão | Volte para a versão do código que criou o banco, ou restaure um backup; o volume precisa ser gravável pelo usuário `node` |
+| Fila antiga reaparece no `/play` | Fila salva antes de um restart/queda (comportamento esperado) | `/clear` descarta; `/leave` sai sem guardar |
 | `/seek` demora | O áudio até o ponto pedido é baixado e descartado (ADR-035); em vídeos longos chega a ~7 s | Normal; a faixa continua tocando enquanto isso |
 | Busca retorna o vídeo errado | `ytsearch1` pega só o 1º resultado | Use `/search` para escolher, o autocomplete do `/play`, ou o link direto |
 | Autocomplete não sugere nada | Texto com menos de 3 letras, link, busca lenta (> ~2 s) ou `AUTOCOMPLETE_ENABLED=false` | Digite mais um pouco (a busca segue em segundo plano e a próxima tecla usa o cache) ou envie o texto: o `/play` busca do mesmo jeito |

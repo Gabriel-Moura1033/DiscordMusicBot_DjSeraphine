@@ -11,13 +11,20 @@ import type { Services, VoiceTarget } from './types.js';
 
 export type PlayMode = 'append' | 'now';
 
+/** Playlist salva (/playlist carregar): as faixas já estão resolvidas, não passam pelo yt-dlp. */
+export interface SavedPlaylistInput {
+  readonly kind: 'saved';
+  readonly name: string;
+  readonly tracks: readonly TrackInfo[];
+}
+
 /** /play, /playnow e a escolha do /search: resolve, conecta, enfileira e responde. */
 export interface PlayRequest {
   readonly services: Services;
   readonly guild: Guild;
   readonly member: GuildMember;
   readonly target: VoiceTarget;
-  readonly input: ResolvableInput;
+  readonly input: ResolvableInput | SavedPlaylistInput;
   readonly mode: PlayMode;
   /** Interação já reconhecida (deferReply/deferUpdate); edita a resposta. */
   respond(options: InteractionEditReplyOptions): Promise<Message<true>>;
@@ -55,9 +62,13 @@ function playlistEmbed(
   return baseEmbed()
     .setAuthor({ name: header ?? '📃 Playlist adicionada' })
     .setTitle(truncate(result.title, 256))
-    .setURL(result.url)
     .setDescription(notes.join('\n'))
-    .addFields({ name: 'Posição', value: positionLabel(position), inline: true });
+    .addFields({ name: 'Posição', value: positionLabel(position), inline: true })
+    .setURL(result.url || null);
+}
+
+function restoredNote(count: number): string {
+  return `📂 Fila anterior com ${count} faixa(s) restaurada (depois desta) — use /clear para descartar.`;
 }
 
 async function connect(request: PlayRequest): Promise<GuildPlayer | null> {
@@ -89,7 +100,10 @@ export async function executePlay(request: PlayRequest): Promise<void> {
 
   let result: ResolveResult;
   try {
-    result = await services.youtube.resolve(input);
+    result =
+      input.kind === 'saved'
+        ? { kind: 'playlist', title: `📁 ${input.name}`, url: '', tracks: input.tracks, skipped: 0, truncated: false }
+        : await services.youtube.resolve(input);
   } catch (error) {
     if (error instanceof YtError) {
       await request.respond({ content: `❌ ${capitalize(error.userMessage)}.`, embeds: [], components: [] });
@@ -119,6 +133,8 @@ export async function executePlay(request: PlayRequest): Promise<void> {
     result.kind === 'single'
       ? singleEmbed(result.track, position, input.kind === 'search' ? input.query : null, header)
       : playlistEmbed(result, position, services.config.maxPlaylistSize, header);
+  const restored = player.consumeRestoredCount();
+  if (restored > 0) embed.setFooter({ text: restoredNote(restored) });
   // Começou a tocar agora: a própria resposta vira o painel de controles (o aviso automático é suprimido).
   const first = tracks[0];
   const startedNow = position === 0 && first !== undefined;

@@ -10,7 +10,7 @@ const command: Command = {
     .setContexts(InteractionContextType.Guild),
 
   async execute({ interaction, player }) {
-    player.destroy('leave command');
+    player.destroy('leave command', { discardQueue: true });
     await say(interaction, '👋 Saí do canal de voz.');
   },
 };

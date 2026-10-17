@@ -6,6 +6,7 @@ import type {
   VoiceBasedChannel,
 } from 'discord.js';
 import type { Config } from '../config.js';
+import type { Store } from '../db/repositories.js';
 import type { ControlPanels } from '../interactions/controls.js';
 import type { SearchSessions } from '../interactions/searchSessions.js';
 import type { SuggestionProvider } from '../interactions/suggestions.js';
@@ -21,6 +22,7 @@ export interface Services {
   readonly searches: SearchSessions<TrackInfo>;
   /** `null` = autocomplete desligado (`AUTOCOMPLETE_ENABLED=false`). */
   readonly suggestions: SuggestionProvider | null;
+  readonly store: Store;
 }
 
 export type GuildInteraction = ChatInputCommandInteraction<'cached'>;
@@ -31,6 +33,11 @@ export interface VoiceTarget {
 }
 
 export interface JoinContext extends VoiceTarget {
+  readonly interaction: GuildInteraction;
+  readonly services: Services;
+}
+
+export interface BaseContext {
   readonly interaction: GuildInteraction;
   readonly services: Services;
 }
@@ -50,7 +57,9 @@ interface CommandBase {
  * - `voice-join`: usuário precisa estar em um canal de voz (e no do bot, se ele já estiver conectado).
  * - `same-channel`: bot conectado e usuário no mesmo canal — comandos que controlam o player.
  * - `active-player`: só exige o bot conectado — comandos de leitura (/queue, /nowplaying).
+ * - `none`: sem pré-condição de voz; o comando checa o que precisar (/top, /playlist).
  */
 export type Command =
   | (CommandBase & { readonly guard: 'voice-join'; execute(ctx: JoinContext): Promise<void> })
-  | (CommandBase & { readonly guard: 'same-channel' | 'active-player'; execute(ctx: PlayerContext): Promise<void> });
+  | (CommandBase & { readonly guard: 'same-channel' | 'active-player'; execute(ctx: PlayerContext): Promise<void> })
+  | (CommandBase & { readonly guard: 'none'; execute(ctx: BaseContext): Promise<void> });

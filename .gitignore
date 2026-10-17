@@ -7,4 +7,5 @@ cookies*.txt
 *.cookies
 cookies/
 *.log
+data/
 .DS_Store

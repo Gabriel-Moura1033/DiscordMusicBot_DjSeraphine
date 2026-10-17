@@ -49,6 +49,8 @@ const SEEK_TIMEOUT_MS = 30_000;
 const PRELOAD_TICK_MS = 5_000;
 /** Ao aplicar cortes do SponsorBlock com a faixa já tocando: a troca de stream leva ~2 s. */
 const LATE_APPLY_LEAD_SEC = 2;
+/** Tempo ouvido para uma faixa contar no /top (ou ter terminado normalmente, se for mais curta). */
+const PLAY_COUNT_MIN_SEC = 30;
 
 /**
  * Ganchos para a camada de interface (painel de controles, presença). `trackFinished` sempre vem
@@ -57,6 +59,8 @@ const LATE_APPLY_LEAD_SEC = 2;
 export interface PlayerEvents {
   trackStarted?(player: GuildPlayer, track: Track, announce: boolean): void;
   trackFinished?(player: GuildPlayer, track: Track): void;
+  /** A faixa contou como reproduzida (≥ `PLAY_COUNT_MIN_SEC` ouvidos ou terminou normalmente). */
+  trackPlayed?(player: GuildPlayer, track: Track): void;
 }
 
 export interface GuildPlayerDeps {
@@ -67,7 +71,8 @@ export interface GuildPlayerDeps {
   readonly sponsor: SponsorBlockClient | null;
   /** Objeto compartilhado com o PlayerManager (sobrevive ao player). */
   readonly settings: GuildSettings;
-  readonly onDestroyed: (guildId: string) => void;
+  /** `queue` = espelho para salvar (vazio se a fila foi descartada de propósito). */
+  readonly onDestroyed: (player: GuildPlayer, queue: readonly Track[]) => void;
 }
 
 export interface NowPlaying {
@@ -158,6 +163,9 @@ export class GuildPlayer {
   private seekGeneration = 0;
   /** /previous: a faixa interrompida volta para a fila, não para o histórico. */
   private skipHistoryOnce = false;
+  /** Fila salva antes de um restart/queda, entregue no primeiro pedido (ADR-031). */
+  private pendingRestore: readonly Track[] | null = null;
+  private restoredCount = 0;
   /** /stop: o próximo fim de fila não aciona o autoplay. */
   private stopRequested = false;
   private autoplayEnabled: boolean;
@@ -176,9 +184,10 @@ export class GuildPlayer {
     private readonly deps: GuildPlayerDeps,
   ) {
     this.log = logger.child({ guildId: guild.id });
-    this.volumePercent = deps.config.defaultVolume;
+    this.volumePercent = deps.settings.volume;
+    this.queue.loopMode = deps.settings.loopMode;
     this.history = new History(deps.config.historySize);
-    this.autoplayEnabled = deps.config.autoplayDefault;
+    this.autoplayEnabled = deps.settings.autoplay;
     this.autoplayRecent = new RecentTracks(deps.config.autoplayRecentLimit);
     if (deps.config.preloadEnabled) {
       this.preloadTicker = setInterval(() => this.tickPreload(), PRELOAD_TICK_MS);
@@ -295,6 +304,33 @@ export class GuildPlayer {
     return 0;
   }
 
+  /** Faixa atual (se houver) + próximas: o que o espelho no SQLite guarda. */
+  queueSnapshot(): Track[] {
+    const current = this.queue.current;
+    return current ? [current, ...this.queue.upcoming] : [...this.queue.upcoming];
+  }
+
+  /** Guarda a fila salva para o primeiro pedido; não toca nada sozinho (o start não reconecta). */
+  restore(tracks: readonly Track[]): void {
+    if (tracks.length > 0) this.pendingRestore = tracks;
+  }
+
+  get hasPendingRestore(): boolean {
+    return this.pendingRestore !== null;
+  }
+
+  /** Quantas faixas o último pedido trouxe de volta da fila salva (zera ao ler). */
+  consumeRestoredCount(): number {
+    const count = this.restoredCount;
+    this.restoredCount = 0;
+    return count;
+  }
+
+  /** Recria o histórico do /previous a partir das últimas reproduções (mais recente primeiro). */
+  seedHistory(tracks: readonly Track[]): void {
+    for (const track of [...tracks].reverse()) this.history.push(track);
+  }
+
   get filter(): FilterName {
     return this.deps.settings.filter;
   }
@@ -318,6 +354,13 @@ export class GuildPlayer {
     const startNow = this.queue.current === null;
     const position = startNow ? 0 : this.queue.size + 1;
     this.queue.add(tracks);
+    // Primeiro pedido depois de um restart: o que foi pedido toca primeiro e a fila salva vem depois.
+    const restored = this.pendingRestore;
+    if (restored) {
+      this.pendingRestore = null;
+      this.queue.add(restored);
+      this.restoredCount = restored.length;
+    }
     // A resposta do /play já mostra a faixa; não duplica o aviso de "tocando agora".
     if (startNow) this.playNext({ skip: false, drop: false }, false);
     return position;
@@ -502,9 +545,12 @@ export class GuildPlayer {
     }, this.deps.config.idleTimeoutMs);
   }
 
-  destroy(reason: string): void {
+  /** `discardQueue`: /leave descarta a fila salva; quedas e timeouts a mantêm para o próximo /play. */
+  destroy(reason: string, options: { readonly discardQueue?: boolean } = {}): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    // Fila salva ainda não entregue continua salva (nada foi pedido desde o restart).
+    const snapshot = options.discardQueue ? [] : (this.pendingRestore ?? this.queueSnapshot());
     this.clearTimer('idle');
     this.clearTimer('alone');
     if (this.readyWatchdog) clearTimeout(this.readyWatchdog);
@@ -519,7 +565,7 @@ export class GuildPlayer {
     this.active = null;
     this.audioPlayer.stop(true);
     if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
-    this.deps.onDestroyed(this.guild.id);
+    this.deps.onDestroyed(this, snapshot);
     this.log.info({ reason }, 'guild player destroyed');
   }
 
@@ -772,6 +818,10 @@ export class GuildPlayer {
       }
       // Só entra no histórico o que chegou a tocar (falha antes do áudio não conta).
       if (stream.resource.playbackDuration > 0 && !keepOutOfHistory) this.history.push(track);
+      const listenedSec = stream.resource.playbackDuration / 1000;
+      if (listenedSec >= PLAY_COUNT_MIN_SEC || (endedBy === 'natural' && listenedSec > 0)) {
+        this.emit('trackPlayed', (events) => events.trackPlayed?.(this, track));
+      }
     }
 
     if (failure && track) {

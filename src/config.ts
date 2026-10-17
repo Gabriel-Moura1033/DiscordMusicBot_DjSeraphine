@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import dotenv from 'dotenv';
 import { FILTER_NAMES, isFilterName, type FilterName } from './audio/filters.js';
 
@@ -20,6 +21,9 @@ export interface Config {
   /** `null` = SponsorBlock desligado. */
   readonly sponsorblockApiUrl: string | null;
   readonly defaultFilter: FilterName;
+  /** Arquivo SQLite; `:memory:` = sem persistência (`DB_PATH` definido e vazio). */
+  readonly dbPath: string;
+  readonly playlistsPerUser: number;
   readonly ytdlpPath: string;
   readonly ffmpegPath: string;
   readonly logLevel: string;
@@ -90,6 +94,14 @@ function filterName(name: string, fallback: FilterName): FilterName {
   return value;
 }
 
+/** Relativo ao diretório de trabalho (`/app` no container); definido e vazio = banco em memória. */
+function databasePath(name: string, fallback: string): string {
+  const raw = process.env[name];
+  if (raw === undefined) return resolve(fallback);
+  const value = raw.trim();
+  return value === '' ? ':memory:' : resolve(value);
+}
+
 /** Diferente de `optional`: variável definida e vazia significa "desligado". */
 function optionalPath(name: string, fallback: string): string | null {
   const raw = process.env[name];
@@ -126,6 +138,8 @@ function loadConfig(): Config {
       ? httpsUrl('SPONSORBLOCK_API_URL', 'https://sponsor.ajay.app')
       : null,
     defaultFilter: filterName('DEFAULT_FILTER', 'nenhum'),
+    dbPath: databasePath('DB_PATH', 'data/dj.sqlite'),
+    playlistsPerUser: integer('PLAYLISTS_PER_USER', 25, 1, 200),
     ytdlpPath: optional('YTDLP_PATH', 'yt-dlp'),
     ffmpegPath: optional('FFMPEG_PATH', 'ffmpeg'),
     logLevel,

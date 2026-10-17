@@ -10,6 +10,7 @@
 | YouTube | `src/youtube/` | `url.ts` (classificar/normalizar entrada), `YouTubeService` (metadados + stream), `errors.ts` (stderr → erro tipado), `process.ts` (spawn/kill) |
 | Infra | `src/config.ts`, `src/logger.ts`, `src/health.ts`, `src/presence.ts` | Config validada; logger pino; heartbeat; presença |
 | Registro | `src/deploy-commands.ts` | PUT dos comandos por guild via REST |
+| Dados | `src/db/` | `openDatabase` (WAL, migrações por `user_version`), repositórios (`Store`) |
 
 ## Fluxo do /play
 1. `interactionCreate` → `commands/index.ts` encontra o comando → `guards.ts` (`voice-join`: usuário em canal de voz; se bot já conectado, mesmo canal).
@@ -47,6 +48,13 @@
 - SponsorBlock: `SponsorBlockClient` (fetch por prefixo de hash, cache 6 h, timeout 1,5 s, nunca lança). Cortes buscados antes (próxima da fila no início de cada faixa e na pré-carga); se a faixa começou sem eles, `applySegmentsLate` reabre o stream 2 s à frente com os cortes (via `seek`).
 - Pré-carga: `tickPreload` a cada 5 s; preload usado em `playNext` por `takePreload` (mesma faixa e mesmo plano); descartado em /stop, destroy, troca de filtro ou quando `peekNext()` muda.
 - `/filtro`: `GuildPlayer.setFilter` grava em `GuildSettings` e chama `seek(posição atual)`.
+
+## Persistência (Fase 6)
+- Start: `openDatabase(DB_PATH)` → migra (falha = não sobe). O bot não reconecta a canais.
+- `PlayerManager.settingsFor` carrega `guild_settings`; `getOrCreate` → `hydrate`: `player.restore(fila salva)` + `seedHistory(plays.recent)`.
+- Espelho a cada 5 s (`persistAll`): copia loop/autoplay/volume do player para `GuildSettings`, grava settings e fila se mudaram; não sobrescreve enquanto a fila salva não foi entregue. `destroy` passa o snapshot (vazio no `/leave` com `discardQueue`; quedas/timeouts mantêm).
+- `PlayerEvents.trackPlayed` (≥ 30 s ouvidos ou fim natural) → `plays.record`. `/top` agrupa por vídeo sem as faixas do autoplay.
+- Shutdown: `persistAll` → `destroyAll` (grava cada fila) → `db.close()`.
 
 ## Estado por guild (`GuildPlayer`)
 - `connection: VoiceConnection`, `audioPlayer: AudioPlayer`

@@ -109,3 +109,10 @@ Diário cronológico, mais recente por último.
 ## 2026-10-17 — Fase 6 cancelada; encerramento da leva
 - Plano da Fase 6 (SQLite) apresentado; usuário cancelou: "manteremos o estado atual do projeto por enquanto". ADR-031 marcada como adiada; plano guardado em 05.
 - Estado final da leva: Fases 1–5 concluídas, 22 comandos, 251 testes, bot rodando `healthy`.
+
+## 2026-10-17 — Fase 6 retomada: persistência SQLite
+- Usuário retomou a Fase 6 e confirmou as duas propostas (pedido toca antes da fila restaurada; autoplay fora do /top).
+- `src/db/` (`database.ts`, `migrations.ts`, `repositories.ts`), `PlayerManager` com espelho/hidratação, `GuildPlayer` (restore, `queueSnapshot`, `seedHistory`, `trackPlayed`, `destroy({ discardQueue })`), `GuildSettings` com loop/autoplay/volume, guard `none`, `/top`, `/playlist` (24 comandos), entrada `saved` no `playFlow`. Volume `dj-data`, `data/` ignorado. Config `DB_PATH`, `PLAYLISTS_PER_USER`. ADR-042.
+- Testes: 280 (+29) com SQLite em memória: migrações (do zero, reaplicar, só as novas, rollback, downgrade), settings (inclusive valores obsoletos), fila (ida e volta), /top (períodos, escopos, autoplay e outras guilds fora), playlists (CRUD, maiúsculas, por usuário, limite, autocomplete), nomes e períodos. Um teste revelou que o histórico recriado perdia a marca de autoplay; corrigido.
+- Validado no container: banco no volume (WAL, dono `node`), dados sobrevivem a `down`/`up`, shutdown limpo; deploy 24 comandos; `healthy`.
+- Pendente: teste no Discord (restauração depois de restart, /top, /playlist).

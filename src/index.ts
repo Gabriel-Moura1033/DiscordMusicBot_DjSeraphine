@@ -4,6 +4,8 @@ import { SponsorBlockClient } from './audio/sponsorblock.js';
 import { SEARCH_TTL_MS } from './commands/search.js';
 import type { Services } from './commands/types.js';
 import { config } from './config.js';
+import { openDatabase } from './db/database.js';
+import { Store } from './db/repositories.js';
 import { startHealthMonitor } from './health.js';
 import { ControlPanels } from './interactions/controls.js';
 import { routeInteraction } from './interactions/router.js';
@@ -38,6 +40,10 @@ async function checkBinaries(youtube: YouTubeService): Promise<void> {
 async function main(): Promise<void> {
   const youtube = new YouTubeService(config);
   await checkBinaries(youtube);
+  // Falha de migração = não sobe (melhor que rodar com schema errado).
+  const db = openDatabase(config.dbPath);
+  const store = new Store(db, { playlistsPerUser: config.playlistsPerUser });
+  logger.info({ path: config.dbPath }, 'database ready');
   logger.debug(`\n${generateDependencyReport()}`);
 
   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
@@ -61,6 +67,13 @@ async function main(): Promise<void> {
       panels.trackFinished(player);
       presence?.finished(player.guildId);
     },
+    trackPlayed: (player, track) => {
+      try {
+        store.plays.record(player.guildId, track);
+      } catch (error) {
+        logger.error({ err: error, guildId: player.guildId }, 'database: record play failed');
+      }
+    },
   };
 
   const sponsorblockApiUrl = config.sponsorblockApiUrl;
@@ -71,7 +84,7 @@ async function main(): Promise<void> {
         onError: (error, videoId) => logger.warn({ err: error, videoId }, 'sponsorblock lookup failed, playing without cuts'),
       })
     : null;
-  const players = new PlayerManager(config, youtube, events, sponsor);
+  const players = new PlayerManager(config, youtube, events, sponsor, store);
   const searches = new SearchSessions<TrackInfo>(SEARCH_TTL_MS);
   const suggestions = config.autocompleteEnabled
     ? new SuggestionProvider({
@@ -80,7 +93,7 @@ async function main(): Promise<void> {
           (await youtube.search(query, AUTOCOMPLETE_RESULTS, AUTOCOMPLETE_SEARCH_TIMEOUT_MS)).map(suggestionFor),
       })
     : null;
-  const services: Services = { config, youtube, players, panels, searches, suggestions };
+  const services: Services = { config, youtube, players, panels, searches, suggestions, store };
 
   let stopHealthMonitor: (() => void) | null = null;
   client.once(Events.ClientReady, (ready) => {
@@ -106,7 +119,14 @@ async function main(): Promise<void> {
     stopHealthMonitor?.();
     presence?.stop();
     searches.clear();
+    // destroyAll grava a fila de cada guild (mantida para o próximo /play) antes de sair dos canais.
+    players.persistAll();
     players.destroyAll('shutdown');
+    try {
+      db.close();
+    } catch (error) {
+      logger.warn({ err: error }, 'error while closing database');
+    }
     const leftover = await waitForChildren(CHILDREN_SHUTDOWN_TIMEOUT_MS);
     if (leftover > 0) logger.warn({ leftover }, 'child processes still alive at shutdown; they will be SIGKILLed');
     try {

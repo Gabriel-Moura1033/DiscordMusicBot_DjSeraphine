@@ -164,8 +164,8 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 - **Contexto:** aprovado pelo usuário ao revisar a ADR-019.
 - **Implementação (2026-10-17):** `ControlPanels` (até 5 mensagens por faixa) e `router.ts`. O aviso automático virou embed com botões (antes texto). O `/nowplaying` é visível a todos, mas os botões exigem o mesmo canal. Clique em painel inativo (faixa acabou, restart) desliga os botões daquela mensagem e explica em efêmero. O `/queue` continua com collector (botões efêmeros de 2 min; migrar não trazia ganho).
 
-## ADR-031 — SQLite como espelho da fila em memória (Fase 6) — ADIADA
-- **Status (2026-10-17):** Fase 6 cancelada pelo usuário ("manteremos o estado atual do projeto por enquanto"). **Nada foi implementado:** fila, configurações e histórico continuam só em memória e se perdem no restart. O plano proposto está em 05 para quando for retomado.
+## ADR-031 — SQLite como espelho da fila em memória (Fase 6)
+- **Status:** adiada e retomada no mesmo dia; implementada (ver ADR-042).
 - **Data:** 2026-10-17
 - **Decisão:** fila e estado continuam em memória durante a execução; o SQLite guarda um espelho para sobreviver a restart e à destruição do player (P-015). Ao restaurar, o primeiro /play avisa "fila anterior com N faixas restaurada — use /clear para descartar". No start não reconecta ao canal.
 - **Contexto:** substitui a decisão original de fila apenas em memória (`01-arquitetura.md`); aprovado pelo usuário.
@@ -236,4 +236,17 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 
 ## ADR-041 — /filtro por guild
 - **Data:** 2026-10-17
-- **Decisão:** `nenhum | bassboost | nightcore | 8d`, guardado em `GuildSettings` (sobrevive ao /leave, mas não ao restart: Fase 6 adiada). Aplicar reabre o stream na posição atual (ADR-035). Efeitos: `bass=g=8:f=110:w=0.6,alimiter=limit=0.95`; `aresample=48000,asetrate=48000*1.25,aresample=48000` (o primeiro aresample corrige m4a a 44,1 kHz); `apulsator=hz=0.125`. Nightcore entra na conversão tempo tocado → posição (velocidade 1,25).
+- **Decisão:** `nenhum | bassboost | nightcore | 8d`, guardado em `GuildSettings` (sobrevive ao /leave e ao restart: ADR-042). Aplicar reabre o stream na posição atual (ADR-035). Efeitos: `bass=g=8:f=110:w=0.6,alimiter=limit=0.95`; `aresample=48000,asetrate=48000*1.25,aresample=48000` (o primeiro aresample corrige m4a a 44,1 kHz); `apulsator=hz=0.125`. Nightcore entra na conversão tempo tocado → posição (velocidade 1,25).
+
+## ADR-042 — node:sqlite, espelho a cada 5 s e regras de restauração
+- **Data:** 2026-10-17
+- **Decisão:** `node:sqlite` (`DatabaseSync`), não `better-sqlite3`.
+  - Node 24.22 traz SQLite 3.53.4 e roda sem aviso de experimental (testado no container); funciona no vitest do host.
+  - Sem dependência nativa nova (o `better-sqlite3` compilaria no build e exigiria outro `allowScripts` no npm 12).
+  - Risco aceito: módulo ainda "release candidate" no Node; usamos só `exec`/`prepare`/`run`/`get`/`all`.
+- **Banco:** `DB_PATH` (padrão `data/dj.sqlite`; vazio = `:memory:`), volume `dj-data` em `/app/data`; WAL + `synchronous=NORMAL`; migrações em `src/db/migrations.ts` por `PRAGMA user_version`, cada uma numa transação; banco mais novo que o código = não sobe.
+- **Espelho:** a cada 5 s, grava fila e configurações de cada guild se o JSON mudou (pega qualquer mutação, inclusive /move e /shuffle, sem instrumentar cada comando); também no destroy e no shutdown. Perda máxima numa queda: 5 s.
+- **Restauração (confirmado pelo usuário):** sem reconectar no start; no primeiro pedido da guild, **a música pedida toca primeiro** e a fila salva vem depois, com o aviso "fila anterior com N faixas restaurada — use /clear para descartar". `/leave` apaga a fila salva; `/stop` a esvazia; queda de voz, "sozinho no canal" e restart a mantêm. Histórico do /previous recriado das últimas reproduções.
+- **/top (confirmado pelo usuário):** conta reprodução com ≥ 30 s ouvidos ou fim natural; **faixas do autoplay não contam** no escopo servidor (no escopo "eu" já não contariam). Escopo "eu" = pedidos da pessoa nesta guild.
+- **Playlists:** por usuário (valem em qualquer guild), nome sem diferenciar maiúsculas (`COLLATE NOCASE`), `salvar` substitui, `PLAYLISTS_PER_USER` (25) para criar; carregar não re-resolve no YouTube (falha de vídeo indisponível cai no aviso normal ao tocar).
+- **Validado:** dados sobrevivem a `compose down` + `up`; volume com dono `node`; shutdown "bye" sem erro com o banco aberto.

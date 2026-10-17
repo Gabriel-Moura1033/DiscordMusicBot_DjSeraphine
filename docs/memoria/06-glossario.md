@@ -32,7 +32,10 @@
 - **StreamPlan** — `src/audio/filters.ts`: `{ startSec, segments, filter, loudnorm }` com que um stream foi aberto. `buildAudioFilter(plan)` gera o `-af`; `mediaPosition(tocado, plan)` dá a posição no vídeo (seek + cortes + velocidade); `activePlan` no `GuildPlayer` substitui o antigo `startOffsetSec`.
 - **Segment** — trecho `[start, end)` no tempo do vídeo removido pelo SponsorBlock (`music_offtopic`).
 - **Pré-carga (preload)** — próxima faixa (`Queue.peekNext()`) aberta `PRELOAD_SECONDS` antes do fim e parada por backpressure; `tickPreload` (5 s) descarta se a próxima ou o plano mudou; `takePreload` usa se bater.
-- **GuildSettings** — preferências por guild (`filter`) guardadas no `PlayerManager`, sobrevivem ao player, mas não ao restart (só em memória).
+- **GuildSettings** — preferências por guild (`filter`, `loopMode`, `autoplay`, `volume`): objeto único no `PlayerManager`, carregado do SQLite; o player aplica ao conectar e o manager copia de volta a cada sincronização.
+- **Store** — `src/db/repositories.ts`: `settings`, `queues` (espelho, position 0 = a que tocava), `plays`, `playlists` sobre uma `DatabaseSync` (`node:sqlite`).
+- **Espelho** — `PlayerManager.persistAll()` a cada 5 s (só grava se o JSON mudou), no `onDestroyed` e no shutdown.
+- **pendingRestore** — fila salva entregue ao `GuildPlayer` ao conectar; o primeiro `enqueue` toca o pedido e coloca a fila salva depois (`consumeRestoredCount` → aviso).
 - **FilterName** — `nenhum` | `bassboost` | `nightcore` | `8d`.
 - **GuildRequester** — o que os guards (`checkJoin`, `checkPlayer`) leem de uma interação; vale para comandos e componentes.
 
@@ -64,6 +67,8 @@
 | `SPONSORBLOCK_ENABLED` | não | `true` | corta `music_offtopic` |
 | `SPONSORBLOCK_API_URL` | não | `https://sponsor.ajay.app` | API (https) |
 | `DEFAULT_FILTER` | não | `nenhum` | filtro inicial por guild |
+| `DB_PATH` | não | `data/dj.sqlite` | arquivo SQLite; definido vazio = em memória |
+| `PLAYLISTS_PER_USER` | não | 25 | playlists salvas por usuário (1–200) |
 | `YTDLP_PATH` | não | `yt-dlp` | binário do yt-dlp |
 | `FFMPEG_PATH` | não | `ffmpeg` | binário do ffmpeg |
 | `YTDLP_AUTO_UPDATE` | não | `true` | `yt-dlp -U` no entrypoint do container |

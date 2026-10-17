@@ -10,6 +10,9 @@ services:
     # /tmp em memória: o yt-dlp standalone extrai ~30 MB por execução ali; reiniciar limpa tudo.
     tmpfs:
       - /tmp:size=512m,mode=1777
+    # SQLite: fila, configurações, histórico e playlists sobrevivem a restart e rebuild.
+    volumes:
+      - dj-data:/app/data
     mem_limit: 768m
     # Shutdown gracioso espera até 5 s pelos processos filhos; folga para fechar o gateway.
     stop_grace_period: 15s
@@ -27,3 +30,6 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+
+volumes:
+  dj-data:

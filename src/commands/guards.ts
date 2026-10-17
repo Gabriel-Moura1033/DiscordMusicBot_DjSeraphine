@@ -60,6 +60,10 @@ export async function runGuarded(command: Command, interaction: GuildInteraction
     await command.execute({ interaction, services, ...result.value });
     return null;
   }
+  if (command.guard === 'none') {
+    await command.execute({ interaction, services });
+    return null;
+  }
   const result = checkPlayer(interaction, services, command.guard === 'same-channel');
   if (!result.ok) return result.message;
   await command.execute({ interaction, services, player: result.value });

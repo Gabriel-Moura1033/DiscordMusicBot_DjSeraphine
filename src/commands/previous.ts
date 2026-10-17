@@ -20,7 +20,9 @@ const command: Command = {
       await deny(interaction, 'Não há faixas anteriores no histórico.');
       return;
     }
-    await say(interaction, `⏮️ Voltando para ${trackLink(result)}.`);
+    const restored = player.consumeRestoredCount();
+    const note = restored > 0 ? `\n📂 Fila anterior com ${restored} faixa(s) restaurada — use /clear para descartar.` : '';
+    await say(interaction, `⏮️ Voltando para ${trackLink(result)}.${note}`);
   },
 };
 

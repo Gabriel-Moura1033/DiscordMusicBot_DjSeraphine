@@ -56,6 +56,8 @@ COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json ./
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# Banco SQLite (DB_PATH padrão data/dj.sqlite); o compose monta um volume aqui.
+RUN mkdir -p /app/data && chown node:node /app/data
 
 USER node
 
