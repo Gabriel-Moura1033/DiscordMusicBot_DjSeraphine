@@ -41,3 +41,7 @@ Diário cronológico, mais recente por último.
 - Credenciais tinham sido preenchidas no `.env.example` (versionado); movidas para `.env` (chmod 600) antes de qualquer commit e `.env.example` restaurado. Histórico verificado sem token.
 - `podman compose build` + deploy de comandos: 12 comandos registrados na guild. `podman compose up -d`: entrypoint ok, binários ok, gateway conectado ("bot ready", bot presente em 2 guilds; comandos só na guild do `.env`).
 - Pendente: testes de voz no Discord (ver 05).
+
+## 2026-10-17 — Correção do 403 intermitente
+- Primeiro teste real: voz funciona (faixa 1 tocou completa, ~4 min). Faixa 2 falhou com HTTP 403 (P-011).
+- `errors.ts`: código `forbidden` + `YtError.retriable`; `GuildPlayer`: `startStream()` separado de `playNext()`, retry silencioso (ADR-024). Imagem reconstruída e bot reiniciado.

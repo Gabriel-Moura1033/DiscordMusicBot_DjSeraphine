@@ -8,7 +8,7 @@
 - **PlayerManager** — registro `Map<guildId, GuildPlayer>`.
 - **ActiveStream** — pipeline em execução (`resource`, `kill()`, `failure(timeoutMs)`).
 - **ParsedInput** — saída de `parseInput()`: `video` | `playlist` | `search` | `rejected`.
-- **YtError** — erro tipado do yt-dlp; `code`: `private` | `unavailable` | `age_restricted` | `geo_blocked` | `bot_check` | `live` | `too_long` | `not_found` | `extractor` | `timeout` | `unknown`.
+- **YtError** — erro tipado do yt-dlp; `code`: `private` | `unavailable` | `age_restricted` | `geo_blocked` | `bot_check` | `live` | `too_long` | `not_found` | `forbidden` | `extractor` | `timeout` | `unknown`.
 - **Guard** — pré-condição do comando: `voice-join` (/play: usuário em canal de voz, o mesmo do bot se conectado) | `same-channel` (controles: bot conectado e usuário no mesmo canal) | `active-player` (/queue, /nowplaying: só bot conectado).
 - **AdvanceOptions** — `{ skip, drop }` passado a `Queue.advance()`: `skip` ignora loop de faixa; `drop` não devolve a atual ao fim da fila no loop de fila.
 - **pendingAdvance** — `AdvanceOptions` registrado por /skip e /stop antes de parar o player; consumido no próximo Idle.

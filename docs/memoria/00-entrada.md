@@ -5,7 +5,7 @@
 ## Estado atual (2026-10-17)
 - Versão 0.1.0 implementada: 12 slash commands, fila por guild, pipeline yt-dlp → ffmpeg com kill limpo, Docker.
 - Verificado: typecheck strict, resolução/streaming no host e no container (podman), sem processos ou /tmp vazando.
-- **Ainda não testado num servidor Discord real** (conexão de voz, DAVE, comandos). É o próximo passo (ver 05).
+- Testado em servidor real: voz e /play funcionam. 403 intermitente do YouTube tratado com retry (P-011). Demais comandos ainda sem teste completo (ver 05).
 - Como rodar: `README.md` (seções 1–3). Problemas conhecidos: 04.
 
 ## Mapa das salas

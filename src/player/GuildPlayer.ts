@@ -23,6 +23,8 @@ const RECONNECT_TIMEOUT_MS = 5_000;
 const FAILURE_GRACE_MS = 3_000;
 /** Abaixo disso, uma falha é "não consegui tocar"; acima, "foi interrompida". */
 const EARLY_FAILURE_MS = 2_000;
+/** Novas tentativas silenciosas para falhas transitórias antes de o áudio começar (ex.: 403 do googlevideo). */
+const MAX_STREAM_RETRIES = 2;
 
 export interface GuildPlayerDeps {
   readonly config: Config;
@@ -51,6 +53,7 @@ export class GuildPlayer {
   private idleTimer: NodeJS.Timeout | null = null;
   private aloneTimer: NodeJS.Timeout | null = null;
   private destroyed = false;
+  private retries = 0;
 
   private constructor(
     private readonly guild: Guild,
@@ -227,16 +230,20 @@ export class GuildPlayer {
       return;
     }
     this.clearTimer('idle');
-
-    const stream = this.deps.youtube.createStream(track);
-    stream.resource.volume?.setVolumeLogarithmic(this.volumePercent / 100);
-    this.active = stream;
-    this.audioPlayer.play(stream.resource);
-    this.log.info({ trackId: track.id, title: track.title }, 'track started');
+    this.retries = 0;
+    this.startStream(track);
     if (!announce) return;
     void this.notify(
       `🎶 Tocando agora: ${trackLink(track)} \`${formatDuration(track.durationSec)}\` — pedido por **${track.requestedBy.name}**`,
     );
+  }
+
+  private startStream(track: Track): void {
+    const stream = this.deps.youtube.createStream(track);
+    stream.resource.volume?.setVolumeLogarithmic(this.volumePercent / 100);
+    this.active = stream;
+    this.audioPlayer.play(stream.resource);
+    this.log.info({ trackId: track.id, title: track.title, attempt: this.retries + 1 }, 'track started');
   }
 
   private async onTrackEnd(): Promise<void> {
@@ -255,6 +262,12 @@ export class GuildPlayer {
 
     if (failure && track) {
       const playedMs = stream?.resource.playbackDuration ?? 0;
+      if (failure.retriable && playedMs < EARLY_FAILURE_MS && this.retries < MAX_STREAM_RETRIES) {
+        this.retries++;
+        this.log.warn({ trackId: track.id, ytCode: failure.code, retry: this.retries }, 'stream failed before audio, retrying');
+        this.startStream(track);
+        return;
+      }
       const prefix =
         playedMs < EARLY_FAILURE_MS ? `⚠️ Pulei ${trackLink(track)}` : `⚠️ ${trackLink(track)} foi interrompida`;
       void this.notify(`${prefix}: ${failure.userMessage}.`);

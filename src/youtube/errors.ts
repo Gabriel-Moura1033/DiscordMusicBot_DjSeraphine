@@ -7,6 +7,7 @@ export type YtErrorCode =
   | 'live'
   | 'too_long'
   | 'not_found'
+  | 'forbidden'
   | 'extractor'
   | 'timeout'
   | 'unknown';
@@ -20,10 +21,14 @@ const DEFAULT_MESSAGES: Record<YtErrorCode, string> = {
   live: 'transmissões ao vivo e estreias não são suportadas',
   too_long: 'o vídeo é mais longo que o limite permitido',
   not_found: 'nenhum resultado encontrado',
+  forbidden: 'o YouTube recusou o download do áudio (HTTP 403)',
   extractor: 'o yt-dlp não conseguiu extrair o áudio (pode estar desatualizado; reiniciar o bot força a atualização)',
   timeout: 'o YouTube demorou demais para responder',
   unknown: 'erro inesperado ao acessar o YouTube',
 };
+
+/** Falhas que valem uma nova tentativa com extração nova antes de pular a faixa. */
+const RETRIABLE: ReadonlySet<YtErrorCode> = new Set(['forbidden', 'extractor', 'timeout', 'unknown']);
 
 export class YtError extends Error {
   override readonly name = 'YtError';
@@ -35,6 +40,10 @@ export class YtError extends Error {
     readonly stderr?: string,
   ) {
     super(`${code}: ${userMessage}`);
+  }
+
+  get retriable(): boolean {
+    return RETRIABLE.has(this.code);
   }
 }
 
@@ -49,7 +58,9 @@ const PATTERNS: ReadonlyArray<readonly [YtErrorCode, RegExp]> = [
     'unavailable',
     /Video unavailable|This video is unavailable|has been removed|account associated with this video has been terminated|does not exist|Incomplete YouTube ID/i,
   ],
-  ['extractor', /Requested format is not available|nsig|Signature extraction failed|Unable to extract|HTTP Error 403/i],
+  // 403 no googlevideo costuma ser transitório (URL assinada recusada); uma nova extração resolve.
+  ['forbidden', /HTTP Error 403/i],
+  ['extractor', /Requested format is not available|nsig|Signature extraction failed|Unable to extract/i],
 ];
 
 export function classifyStderr(stderr: string): YtErrorCode {

@@ -51,3 +51,10 @@ Status: `aberto` · `contornado` · `resolvido`.
 - **Sintoma:** após `kill()`, `failure()` sempre esgotava o timeout; ffmpeg sobrevivia até o SIGKILL. Num teste anterior o processo ficou preso por minutos.
 - **Causa:** ffmpeg bloqueado escrevendo num stdout sem leitor trata SIGTERM só depois do write; e o Node só emite `close` quando os pipes fecham.
 - **Solução:** `kill()` faz `destroy()` em `src.stdout`, `dec.stdin` e `dec.stdout` antes de sinalizar. Tudo termina em < 300 ms. (Em uso real o `@discordjs/voice` já destrói o `playStream` no stop, mas o pipeline não depende mais disso.)
+
+## P-011 — HTTP 403 intermitente ao baixar o áudio
+- **Status:** contornado
+- **Sintoma:** 2ª faixa da fila falhou com "o yt-dlp não conseguiu extrair o áudio"; log: `[info] Downloading 1 format(s): 251` → `ERROR: unable to download video data: HTTP Error 403: Forbidden` (cliente `visionos`, sem PO Token provider). Mesma URL baixou normalmente em 3 tentativas manuais logo depois.
+- **Causa:** googlevideo recusa a URL assinada de forma intermitente; não é yt-dlp desatualizado (já estava na última versão). O 403 estava classificado como `extractor`, gerando mensagem enganosa.
+- **Solução:** código próprio `forbidden`; falhas `forbidden`/`extractor`/`timeout`/`unknown` antes de 2 s de áudio são tentadas de novo em silêncio (até 2 vezes, extração nova). Se persistir com frequência, avaliar um PO Token provider (ex.: bgutil) — ver 05.
+- **Limitação:** 403 no meio da faixa não é retomado (a faixa é marcada como interrompida).

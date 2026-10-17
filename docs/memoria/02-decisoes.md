@@ -121,3 +121,9 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 ## ADR-023 — Entrypoint atualiza o yt-dlp sem bloquear o start
 - **Data:** 2026-10-17
 - **Decisão:** `docker-entrypoint.sh` roda `yt-dlp --update-to stable` com `timeout 90`; falha imprime aviso + últimas linhas do erro e segue com `exec "$@"`. Binário em `/opt/yt-dlp` (dono `node`).
+
+## ADR-024 — Retry silencioso de stream antes do áudio começar
+- **Data:** 2026-10-17
+- **Decisão:** `GuildPlayer` reinicia o stream da mesma faixa até `MAX_STREAM_RETRIES = 2` vezes quando a falha é `YtError.retriable` e tocou < 2 s; só depois pula e avisa. Contador zera a cada faixa nova.
+- **Contexto:** P-011 (403 intermitente do googlevideo).
+- **Descartado:** `--retries` do yt-dlp (não repete 403; a URL assinada é a mesma); retomar no meio da faixa (exigiria seek com `--download-sections`).
