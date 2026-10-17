@@ -20,3 +20,8 @@ Diário cronológico, mais recente por último.
 - `src/player/Queue.ts` (fila pura; `advance({skip, drop})` cobre loop off/track/queue, skip e falhas).
 - `src/player/GuildPlayer.ts` (conexão, AudioPlayer, timers idle/alone, aviso de falha, reconexão em 5 s).
 - `src/player/PlayerManager.ts` (Map por guild + Map de conexões pendentes para /play concorrente).
+
+## 2026-10-17 — Comandos e bootstrap
+- `src/commands/*` (12 comandos, guards, respostas, embeds, roteador), `src/index.ts`, `src/deploy-commands.ts`.
+- Verificado: `tsc` limpo, sem `any`; build roda, checa yt-dlp/ffmpeg no start, falha controlada com token inválido; JSON dos comandos gerado; lógica de loop/skip/drop da fila testada em script.
+- Pendente: Docker, README, teste real em servidor.

@@ -91,3 +91,18 @@ Formato: `ADR-NNN — título` · data · decisão · contexto · alternativas d
 ## ADR-017 — Guard de canal de voz por metadado
 - **Data:** 2026-10-17
 - **Decisão:** cada comando declara `requiresSameChannel`; o roteador aplica o guard antes de `execute`. `/play` com bot desconectado só exige que o usuário esteja em algum canal de voz.
+
+## ADR-018 — /queue e /nowplaying não exigem estar no canal
+- **Data:** 2026-10-17
+- **Decisão:** guard `active-player` para comandos de leitura; só comandos que alteram o estado exigem `same-channel`.
+- **Contexto:** "só quem está no canal pode controlar" — ver a fila não é controlar.
+
+## ADR-019 — Aviso de "tocando agora" no canal de texto
+- **Data:** 2026-10-17
+- **Decisão:** cada faixa que começa por avanço da fila gera mensagem no canal do último /play (sem preview de link). A faixa iniciada pelo próprio /play não gera aviso extra (a resposta do comando já mostra).
+
+## ADR-020 — Process group por processo filho
+- **Data:** 2026-10-17
+- **Decisão:** `spawn(..., { detached: true })` e `process.kill(-pid, 'SIGKILL')`.
+- **Contexto:** o binário standalone do yt-dlp (PyInstaller onefile) é um bootloader que faz fork do interpretador; o yt-dlp ainda pode iniciar o Deno. SIGKILL só no pid principal deixaria órfãos.
+- **Descartado:** `child.kill()` simples.

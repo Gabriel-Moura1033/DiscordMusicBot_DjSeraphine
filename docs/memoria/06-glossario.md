@@ -6,15 +6,19 @@
 - **LoopMode** — `off` | `track` | `queue`.
 - **GuildPlayer** — dono da conexão de voz, AudioPlayer, fila e timers de uma guild.
 - **PlayerManager** — registro `Map<guildId, GuildPlayer>`.
-- **ActiveStream** — pipeline em execução (`resource`, `kill()`, `failure()`).
+- **ActiveStream** — pipeline em execução (`resource`, `kill()`, `failure(timeoutMs)`).
 - **ParsedInput** — saída de `parseInput()`: `video` | `playlist` | `search` | `rejected`.
-- **YtError** — erro tipado do yt-dlp; `code`: `private` | `unavailable` | `age_restricted` | `geo_blocked` | `bot_check` | `live` | `too_long` | `not_found` | `unknown`.
-- **Guard** — pré-condição de canal de voz: `none` | `voice-join` (/play) | `same-channel` (demais).
+- **YtError** — erro tipado do yt-dlp; `code`: `private` | `unavailable` | `age_restricted` | `geo_blocked` | `bot_check` | `live` | `too_long` | `not_found` | `extractor` | `timeout` | `unknown`.
+- **Guard** — pré-condição do comando: `voice-join` (/play: usuário em canal de voz, o mesmo do bot se conectado) | `same-channel` (controles: bot conectado e usuário no mesmo canal) | `active-player` (/queue, /nowplaying: só bot conectado).
+- **AdvanceOptions** — `{ skip, drop }` passado a `Queue.advance()`: `skip` ignora loop de faixa; `drop` não devolve a atual ao fim da fila no loop de fila.
+- **pendingAdvance** — `AdvanceOptions` registrado por /skip e /stop antes de parar o player; consumido no próximo Idle.
 
 ## Convenções de código
 - TypeScript strict, ESM (`"type": "module"`, imports com `.js`), sem `any`.
 - Arquivos de classe em PascalCase (`GuildPlayer.ts`); módulos utilitários em camelCase/kebab (`url.ts`, `format.ts`).
-- Um arquivo por comando em `src/commands/`, exportando `default` do tipo `Command`.
+- Um arquivo por comando em `src/commands/`, exportando `default` do tipo `Command`; registrar em `src/commands/index.ts`.
+- Nomes de opções de slash command em português sem acento (`musica`, `posicao`, `nivel`, `modo`).
+- Respostas: `say()` (pública, sem preview de link) e `deny()` (efêmera) em `src/commands/reply.ts`.
 - Mensagens ao usuário em português; logs em inglês com campos estruturados (`guildId`, `trackId`).
 - Commits: Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `build:`).
 

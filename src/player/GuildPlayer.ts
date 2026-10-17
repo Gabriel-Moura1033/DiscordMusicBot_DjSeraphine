@@ -131,7 +131,8 @@ export class GuildPlayer {
     const startNow = this.queue.current === null;
     const position = startNow ? 0 : this.queue.size + 1;
     this.queue.add(tracks);
-    if (startNow) this.playNext({ skip: false, drop: false });
+    // A resposta do /play já mostra a faixa; não duplica o aviso de "tocando agora".
+    if (startNow) this.playNext({ skip: false, drop: false }, false);
     return position;
   }
 
@@ -218,7 +219,7 @@ export class GuildPlayer {
     this.audioPlayer.stop(true);
   }
 
-  private playNext(advance: AdvanceOptions): void {
+  private playNext(advance: AdvanceOptions, announce = true): void {
     if (this.destroyed) return;
     const track = this.queue.advance(advance);
     if (!track) {
@@ -232,6 +233,7 @@ export class GuildPlayer {
     this.active = stream;
     this.audioPlayer.play(stream.resource);
     this.log.info({ trackId: track.id, title: track.title }, 'track started');
+    if (!announce) return;
     void this.notify(
       `🎶 Tocando agora: ${trackLink(track)} \`${formatDuration(track.durationSec)}\` — pedido por **${track.requestedBy.name}**`,
     );
